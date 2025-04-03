@@ -1,0 +1,38 @@
+{
+  "manifest_version": 3,
+  "name": "小米便签增强助手",
+  "version": "1.0",
+  "description": "为小米便签网页提供增强功能",
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "images/icon16.png",
+      "48": "images/icon48.png",
+      "128": "images/icon128.png"
+    }
+  },
+  "permissions": [
+    "activeTab",
+    "scripting",
+    "storage"
+  ],
+  "host_permissions": [
+    "https://i.mi.com/*"
+  ],
+  "content_scripts": [
+    {
+      "matches": [
+        "https://i.mi.com/note/*",
+        "https://i.mi.com/note/h5*"
+      ],
+      "js": ["content.js"],
+      "run_at": "document_end",
+      "all_frames": true
+    }
+  ],
+  "icons": {
+    "16": "images/icon16.png",
+    "48": "images/icon48.png",
+    "128": "images/icon128.png"
+  }
+} 

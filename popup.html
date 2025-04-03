@@ -1,0 +1,125 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>小米便签增强助手</title>
+  <style>
+    body {
+      font-family: 'Microsoft YaHei', sans-serif;
+      width: 320px;
+      padding: 15px;
+    }
+    h1 {
+      font-size: 18px;
+      text-align: center;
+      margin-bottom: 15px;
+      color: #ff6700; /* 小米橙色 */
+    }
+    p {
+      line-height: 1.5;
+      text-align: center;
+      margin-bottom: 10px;
+    }
+    .tips {
+      background-color: #f8f8f8;
+      border-left: 4px solid #ff6700;
+      padding: 10px;
+      margin: 15px 0;
+      font-size: 14px;
+    }
+    .debug-btn {
+      background-color: #ff6700;
+      color: white;
+      border: none;
+      padding: 8px 15px;
+      border-radius: 4px;
+      cursor: pointer;
+      display: block;
+      margin: 10px auto;
+      width: 80%;
+    }
+    .debug-btn:hover {
+      background-color: #ff8c32;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>小米便签增强助手</h1>
+    <p>请访问小米便签页面使用本扩展</p>
+    <p><a href="https://i.mi.com/note/h5" target="_blank">打开小米便签</a></p>
+    
+    <div class="tips">
+      <p><strong>没有看到按钮？</strong>请尝试：</p>
+      <ol style="text-align: left; padding-left: 20px;">
+        <li>刷新小米便签页面</li>
+        <li>确保扩展已启用</li>
+        <li>重启浏览器</li>
+      </ol>
+    </div>
+    
+    <button class="debug-btn" id="injectBtn">手动激活按钮</button>
+    <button class="debug-btn" id="reloadBtn">重新加载扩展</button>
+  </div>
+
+  <script>
+    // 手动激活按钮
+    document.getElementById('injectBtn').addEventListener('click', function() {
+      chrome.tabs.query({active: true, currentWindow: true}, function(tabs) {
+        if (tabs[0].url.includes('i.mi.com/note')) {
+          chrome.scripting.executeScript({
+            target: {tabId: tabs[0].id},
+            function: injectButton
+          });
+        } else {
+          alert('请先打开小米便签页面');
+        }
+      });
+    });
+    
+    // 重新加载扩展
+    document.getElementById('reloadBtn').addEventListener('click', function() {
+      chrome.runtime.reload();
+    });
+    
+    // 注入按钮的函数
+    function injectButton() {
+      // 创建按钮
+      if (!document.getElementById('mi-note-helper-btn')) {
+        const floatingBtn = document.createElement('div');
+        floatingBtn.id = 'mi-note-helper-btn';
+        floatingBtn.innerHTML = '⚙️';
+        floatingBtn.title = '小米便签增强助手';
+        floatingBtn.style.cssText = `
+          position: fixed !important;
+          bottom: 20px !important;
+          left: 20px !important;
+          width: 40px !important;
+          height: 40px !important;
+          background-color: #ff6700 !important;
+          color: white !important;
+          border-radius: 50% !important;
+          display: flex !important;
+          align-items: center !important;
+          justify-content: center !important;
+          font-size: 24px !important;
+          box-shadow: 0 2px 10px rgba(0,0,0,0.2) !important;
+          cursor: pointer !important;
+          z-index: 9999999 !important;
+          opacity: 0.9 !important;
+        `;
+        
+        document.body.appendChild(floatingBtn);
+        
+        floatingBtn.addEventListener('click', function() {
+          alert('您点击了小米便签增强助手按钮！');
+        });
+        
+        return '按钮已添加到页面';
+      } else {
+        return '按钮已存在';
+      }
+    }
+  </script>
+</body>
+</html> 
