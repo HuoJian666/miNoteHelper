@@ -2,24 +2,19 @@
 window.addEventListener("load", initFunc);
 
 const folderListContainerClassName = "expanded-content";
-
-// 默认设置
-const defaultSettings = {
-  darkMode: false,
-  fontSize: "medium",
-  autoSave: true,
-  themeColor: "#ff6700",
-  hideAllFolder: true,
-  hideUnclassified: true, // 添加未分类隐藏设置
-};
+let currentSettings = defaultSettings;
+let currentSiderBarList = [];
 
 // 程序入口
 function initFunc() {
   createFloatingButton();
-  loadSettings().then((settings) => {
-    console.log("loadSettings-----", settings);
-    handleSetting(settings);
-  });
+
+  setTimeout(() => {
+    getFolderNameList();
+    loadSettings().then((settings) => {
+      handleSetting(settings);
+    });
+  }, 2000);
 }
 
 // 创建左下角悬浮按钮
@@ -64,15 +59,11 @@ function createFloatingButton() {
   });
 }
 
+// 读取并处理应用设置
 function handleSetting(settings) {
-  hideSystemAndAll(settings.hideAllFolder, settings.hideUnclassified);
-  if (settings.hideAllFolder) {
-    applyHideFolderSettings(true);
-  }
+  currentSettings = settings;
+  handleHide(settings);
 
-  if (settings.hideUnclassified) {
-    applyHideUnclassifiedSettings(true);
-  }
   setTimeout(() => {
     getUsefulTempFolder();
   }, 2000);
@@ -172,7 +163,7 @@ function toggleSettingsPanel() {
         </label>
       </div>
       
-      <button id="apply-settings-btn" style="
+      <button id="save-setting-btn" style="
         background-color: #ff6700;
         color: white;
         border: none;
@@ -182,7 +173,7 @@ function toggleSettingsPanel() {
         width: 100%;
         font-size: 14px;
         margin-top: 5px;
-      ">应用设置</button>
+      " >应用设置</button>
     `;
 
     document.body.appendChild(panel);
@@ -194,9 +185,9 @@ function toggleSettingsPanel() {
         panel.style.display = "none";
       });
 
-    // 应用设置按钮事件
+    // 保存设置
     document
-      .getElementById("apply-settings-btn")
+      .getElementById("save-setting-btn")
       .addEventListener("click", function () {
         // 获取设置值
         const darkMode =
@@ -222,10 +213,7 @@ function toggleSettingsPanel() {
         };
 
         saveSettings(settings).then(() => {
-          // 应用隐藏文件夹设置
-          applyHideFolderSettings(hideAllFolder);
-          // 应用隐藏未分类设置
-          applyHideUnclassifiedSettings(hideUnclassified);
+          handleSetting(settings);
 
           // 显示已应用提示
           alert(
@@ -287,34 +275,16 @@ function saveSettings(settings) {
 
 // 从本地存储加载设置
 function loadSettings() {
+  const defaultSettings = getDefaultSettings();
   return new Promise((resolve) => {
     try {
       // 检查chrome.storage是否可用，尝试从chrome.storage加载设置
-      if (
-        typeof chrome !== "undefined" &&
-        chrome.storage &&
-        chrome.storage.sync
-      ) {
-        chrome.storage.sync.get("miNoteSettings", function (result) {
-          // 合并默认设置和已保存的设置
-          const settings = result.miNoteSettings;
-          console.log("从chrome.storage加载的设置:", settings);
-          resolve(settings);
-          return;
-        });
-      }
-
-      // 如果chrome.storage不可用，使用localStorage
-      const savedSettings = localStorage.getItem("miNoteSettings");
-      const settings = savedSettings
-        ? JSON.parse(savedSettings)
-        : defaultSettings;
-      console.log(
-        "从localStorage加载的设置（chrome.storage不可用）:",
-        settings
-      );
-      resolve(settings);
-      return;
+      chrome.storage.sync.get("miNoteSettings", function (result) {
+        // 合并默认设置和已保存的设置
+        const settings = result.miNoteSettings;
+        console.log("从chrome.storage加载的设置:", settings);
+        resolve(settings);
+      });
     } catch (error) {
       console.error("加载设置时出错:", error);
       resolve(defaultSettings);
@@ -394,21 +364,6 @@ function applyHideUnclassifiedSettings(hide) {
   }, 1000);
 }
 
-// 通过部分类名查找元素
-function findElementsByPartialClassName(partialClassName) {
-  try {
-    // 使用CSS选择器查找包含指定部分类名的所有元素
-    const elements = document.querySelectorAll(
-      `[class*="${partialClassName}"]`
-    );
-    const foundElements = Array.from(elements);
-    return foundElements;
-  } catch (error) {
-    console.error(`查找类名包含 "${partialClassName}" 的元素时出错:`, error);
-    return [];
-  }
-}
-
 // 获取expanded-content下包含"b-有用暂存"的sidebar-item元素
 function getUsefulTempFolder() {
   // 首先找到class包含expanded-content的元素
@@ -445,62 +400,98 @@ function getUsefulTempFolder() {
   targetItem.click();
 }
 
-// 如果需要点击该元素，可以使用下面的函数
-function clickUsefulTempFolder() {
-  const folderElement = getUsefulTempFolder();
-  if (folderElement) {
-    console.log("点击有用暂存文件夹");
-    folderElement.click();
-    return true;
-  } else {
-    console.log("未找到有用暂存文件夹，无法点击");
-    return false;
-  }
+// 获取默认设置
+function getDefaultSettings() {
+  const obj = {
+    darkMode: false,
+    fontSize: "medium",
+    autoSave: true,
+    themeColor: "#ff6700",
+    hideAllFolder: true,
+    hideUnclassified: true, // 添加未分类隐藏设置
+    /**
+     * 文件夹列表展示
+     * {
+     *  name: 文件夹名称
+     *  show: 是否隐藏
+     * }
+     */
+    folderListState: [
+      {
+        folderName: "test",
+        show: true,
+      },
+    ],
+  };
+
+  const folderNameList = getFolderNameList();
+  const defaultFolderState = folderNameList.map((item) => ({
+    folderName: item,
+    show: true,
+  }));
+  obj.folderListState = defaultFolderState;
+  return obj;
+}
+// 处理文件夹隐藏逻辑
+function handleHide(settings) {
+  let stateList = [
+    {
+      folderName: "全部笔记",
+      show: !settings.hideAllFolder,
+    },
+    {
+      folderName: "未分类",
+      show: !settings.hideUnclassified,
+    },
+  ];
+  applySidebarItemListChange(stateList);
 }
 
-/**
- * 隐藏指定的DOM元素
- * @param {HTMLElement} element - 要隐藏的DOM元素
- * @param {string} [description=''] - 元素的描述，用于日志记录
- * @returns {boolean} - 操作是否成功
- */
-function hideDomElement(element) {
-  try {
-    if (!element || !(element instanceof HTMLElement)) {
-      console.error("hideDomElement: 无效的DOM元素", element);
-      return false;
+// 根据state隐藏、展示sidebar-item
+function applySidebarItemListChange(stateList = []) {
+  const showList = [];
+  stateList.forEach((state) => {
+    if (state.show) {
+      showList.push(state.folderName);
     }
+  });
 
-    // 直接隐藏元素
-    element.style.display = "none";
-    console.log(`已隐藏元素`);
-  } catch (error) {
-    console.error(`隐藏元素时出错:`, error);
-  }
-}
-
-function hideSystemAndAll(hideAllFolder, hideUnclassified) {
-  const [container] = findElementsByPartialClassName("sidebar-body");
-  if (!container) {
-    console.log("未找到sidebar-body元素");
+  const sidebarItems = findElementsByPartialClassName("sidebar-item");
+  if (!sidebarItems.length) {
+    console.log("applySidebarItemChange----未找到sidebar-item元素");
     return;
   }
 
-  const sidebarItems = container.querySelectorAll('[class*="sidebar-item"]');
-
-  const targetItems = [];
   sidebarItems.forEach((item) => {
-    if (hideAllFolder && item.textContent.includes("全部笔记")) {
-      targetItems.push(item);
-    }
-    if (hideUnclassified && item.textContent.includes("未分类")) {
-      targetItems.push(item);
-    }
-  });
-
-  targetItems.forEach((item) => {
-    item.style.display = "none";
+    const ifShow = showList.find((folderName) => {
+      return item.textContent.includes(folderName);
+    });
+    item.style.display = ifShow ? "" : "none";
   });
 }
 
-function hideSidebarItem(hideUnclassified) {}
+/* tool func */
+
+// 通过部分类名查找元素
+function findElementsByPartialClassName(partialClassName) {
+  try {
+    // 使用CSS选择器查找包含指定部分类名的所有元素
+    const elements = document.querySelectorAll(
+      `[class*="${partialClassName}"]`
+    );
+    const foundElements = Array.from(elements);
+    return foundElements;
+  } catch (error) {
+    console.error(`查找类名包含 "${partialClassName}" 的元素时出错:`, error);
+    return [];
+  }
+}
+
+function getFolderNameList() {
+  const sidebarItems = findElementsByPartialClassName("sidebar-item");
+  const folderNameList = [];
+  sidebarItems.forEach((item) => {
+    folderNameList.push(item.textContent.trim());
+  });
+  return folderNameList;
+}
