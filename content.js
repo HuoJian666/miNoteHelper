@@ -5,10 +5,12 @@ const folderListContainerClassName = "expanded-content";
 
 // 默认设置
 const defaultSettings = {
-  darkMode: false,
   hideAllFolder: true,
-  hideUnclassified: true, // 添加未分类隐藏设置
-  floatingToc: false, // 悬浮目录功能
+  hideUnclassified: true,
+  floatingToc: false,
+  tocShowH1: true,
+  tocShowH2: true,
+  tocShowH3: true,
 };
 
 // 程序入口
@@ -155,11 +157,39 @@ function expandSettingsPanel() {
             settings.hideUnclassified ? "checked" : ""
           }>
         </label>
-
-        <label style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0;">
-          <span style="color: #333;">悬浮目录</span>
+      </div>
+      
+      <!-- 悬浮目录设置分组 -->
+      <div style="margin-bottom: 15px; padding-top: 10px; border-top: 2px solid #f0f0f0;">
+        <div style="font-size: 14px; font-weight: bold; color: #ff6700; margin-bottom: 10px;">
+          📑 悬浮目录设置
+        </div>
+        
+        <label style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0 8px 12px; border-bottom: 1px solid #f5f5f5;">
+          <span style="color: #666; font-size: 13px;">启用悬浮目录</span>
           <input type="checkbox" id="setting-floating-toc" style="width: 18px; height: 18px;" ${
             settings.floatingToc ? "checked" : ""
+          }>
+        </label>
+        
+        <label style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0 8px 12px; border-bottom: 1px solid #f5f5f5;">
+          <span style="color: #666; font-size: 13px;">显示H1</span>
+          <input type="checkbox" id="setting-toc-show-h1" style="width: 18px; height: 18px;" ${
+            settings.tocShowH1 ? "checked" : ""
+          }>
+        </label>
+        
+        <label style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0 8px 12px; border-bottom: 1px solid #f5f5f5;">
+          <span style="color: #666; font-size: 13px;">显示H2</span>
+          <input type="checkbox" id="setting-toc-show-h2" style="width: 18px; height: 18px;" ${
+            settings.tocShowH2 ? "checked" : ""
+          }>
+        </label>
+        
+        <label style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0 8px 12px;">
+          <span style="color: #666; font-size: 13px;">显示H3</span>
+          <input type="checkbox" id="setting-toc-show-h3" style="width: 18px; height: 18px;" ${
+            settings.tocShowH3 ? "checked" : ""
           }>
         </label>
       </div>
@@ -189,8 +219,6 @@ function expandSettingsPanel() {
       .getElementById("apply-settings-btn")
       .addEventListener("click", function () {
         // 获取设置值
-        const darkMode =
-          document.getElementById("setting-dark-mode")?.checked || false;
         const hideAllFolder = document.getElementById(
           "setting-hide-all-folders"
         ).checked;
@@ -200,13 +228,24 @@ function expandSettingsPanel() {
         const floatingToc = document.getElementById(
           "setting-floating-toc"
         ).checked;
+        const tocShowH1 = document.getElementById(
+          "setting-toc-show-h1"
+        ).checked;
+        const tocShowH2 = document.getElementById(
+          "setting-toc-show-h2"
+        ).checked;
+        const tocShowH3 = document.getElementById(
+          "setting-toc-show-h3"
+        ).checked;
 
         // 保存设置
         const settings = {
-          darkMode,
           hideAllFolder,
           hideUnclassified,
           floatingToc,
+          tocShowH1,
+          tocShowH2,
+          tocShowH3,
         };
 
         saveSettings(settings).then(() => {
@@ -304,8 +343,8 @@ function loadSettings() {
         chrome.storage.sync
       ) {
         chrome.storage.sync.get("miNoteSettings", function (result) {
-          // 合并默认设置和已保存的设置
-          const settings = result.miNoteSettings || defaultSettings;
+          // 合并默认设置和已保存的设置（确保新字段有默认值）
+          const settings = { ...defaultSettings, ...(result.miNoteSettings || {}) };
           console.log("从chrome.storage加载的设置:", settings);
           resolve(settings);
           return;
@@ -316,7 +355,7 @@ function loadSettings() {
       // 如果chrome.storage不可用，使用localStorage
       const savedSettings = localStorage.getItem("miNoteSettings");
       const settings = savedSettings
-        ? JSON.parse(savedSettings)
+        ? { ...defaultSettings, ...JSON.parse(savedSettings) }
         : defaultSettings;
       console.log(
         "从localStorage加载的设置（chrome.storage不可用）:",
@@ -449,47 +488,59 @@ function createFloatingToc() {
   
   console.log("开始创建悬浮目录...");
   
-  // 首先尝试提取便签标题
-  let headings = [];
-  const noteTitle = document.querySelector('.title-textarea');
-  if (noteTitle) {
-    const titleText = noteTitle.textContent.trim();
-    if (titleText) {
-      headings.push({
-        text: titleText,
-        level: 1,
-        element: noteTitle,
-        isNoteTitle: true  // 标记为便签标题
-      });
-      console.log("找到便签标题:", titleText);
+  // 加载设置以获取过滤选项
+  loadSettings().then((settings) => {
+    // 首先尝试提取便签标题
+    let headings = [];
+    const noteTitle = document.querySelector('.title-textarea');
+    if (noteTitle) {
+      const titleText = noteTitle.textContent.trim();
+      if (titleText) {
+        headings.push({
+          text: titleText,
+          level: 1,
+          element: noteTitle,
+          isNoteTitle: true  // 标记为便签标题
+        });
+        console.log("找到便签标题:", titleText);
+      }
     }
-  }
-  
-  // 查找笔记内容区域
-  const noteContent = findNoteContentArea();
-  if (noteContent) {
-    console.log("找到笔记内容区域，继续提取内容中的标题");
-    // 提取内容区域的标题
-    const contentHeadings = extractHeadingsFromContent(noteContent);
-    headings = headings.concat(contentHeadings);
     
-    // 设置内容监听器，自动更新目录
-    setupTocContentObserver(noteContent);
-  } else {
-    console.log("未找到笔记内容区域，仅使用便签标题");
-  }
-  
-  if (headings.length === 0) {
-    console.log("未找到任何标题，无法创建目录");
-    return;
-  }
-  
-  console.log(`找到 ${headings.length} 个标题`);
-  
-  // 先创建收起状态的小图标
-  createMinimizedTocIcon(headings);
-  
-  console.log("悬浮目录创建成功（默认收起状态）");
+    // 查找笔记内容区域
+    const noteContent = findNoteContentArea();
+    if (noteContent) {
+      console.log("找到笔记内容区域，继续提取内容中的标题");
+      // 提取内容区域的标题
+      const contentHeadings = extractHeadingsFromContent(noteContent);
+      headings = headings.concat(contentHeadings);
+      
+      // 设置内容监听器，自动更新目录
+      setupTocContentObserver(noteContent);
+    } else {
+      console.log("未找到笔记内容区域，仅使用便签标题");
+    }
+    
+    // 根据设置过滤标题
+    headings = headings.filter(h => {
+      if (h.level === 1 && !settings.tocShowH1) return false;
+      if (h.level === 2 && !settings.tocShowH2) return false;
+      if (h.level === 3 && !settings.tocShowH3) return false;
+      return true;
+    });
+    console.log(`应用标题级别过滤，剩余 ${headings.length} 个标题`);
+    
+    if (headings.length === 0) {
+      console.log("未找到任何标题，无法创建目录");
+      return;
+    }
+    
+    console.log(`找到 ${headings.length} 个标题`);
+    
+    // 先创建收起状态的小图标
+    createMinimizedTocIcon(headings);
+    
+    console.log("悬浮目录创建成功（默认收起状态）");
+  });
 }
 
 // 设置内容观察器，监听笔记内容变化
@@ -523,54 +574,66 @@ function setupTocContentObserver(noteContent) {
 
 // 更新悬浮目录（保持当前展开/收起状态）
 function updateFloatingToc() {
-  // 提取最新的标题
-  let headings = [];
-  const noteTitle = document.querySelector('.title-textarea');
-  if (noteTitle) {
-    const titleText = noteTitle.textContent.trim();
-    if (titleText) {
-      headings.push({
-        text: titleText,
-        level: 1,
-        element: noteTitle,
-        isNoteTitle: true
-      });
+  // 加载设置以获取过滤选项
+  loadSettings().then((settings) => {
+    // 提取最新的标题
+    let headings = [];
+    const noteTitle = document.querySelector('.title-textarea');
+    if (noteTitle) {
+      const titleText = noteTitle.textContent.trim();
+      if (titleText) {
+        headings.push({
+          text: titleText,
+          level: 1,
+          element: noteTitle,
+          isNoteTitle: true
+        });
+      }
     }
-  }
-  
-  const noteContent = findNoteContentArea();
-  if (noteContent) {
-    const contentHeadings = extractHeadingsFromContent(noteContent);
-    headings = headings.concat(contentHeadings);
-  }
-  
-  if (headings.length === 0) {
-    console.log("没有标题，移除目录");
-    removeFloatingToc();
-    return;
-  }
-  
-  // 检查当前是否有展开的完整目录
-  const existingFullToc = document.getElementById("mi-note-floating-toc");
-  const existingMinimized = document.getElementById("mi-note-toc-minimized");
-  
-  if (existingFullToc) {
-    // 如果完整目录正在显示，不要移除它，只更新小图标的数据
-    if (existingMinimized) {
+    
+    const noteContent = findNoteContentArea();
+    if (noteContent) {
+      const contentHeadings = extractHeadingsFromContent(noteContent);
+      headings = headings.concat(contentHeadings);
+    }
+    
+    // 根据设置过滤标题
+    headings = headings.filter(h => {
+      if (h.level === 1 && !settings.tocShowH1) return false;
+      if (h.level === 2 && !settings.tocShowH2) return false;
+      if (h.level === 3 && !settings.tocShowH3) return false;
+      return true;
+    });
+    console.log(`应用标题级别过滤，剩余 ${headings.length} 个标题`);
+    
+    if (headings.length === 0) {
+      console.log("没有标题，移除目录");
+      removeFloatingToc();
+      return;
+    }
+    
+    // 检查当前是否有展开的完整目录
+    const existingFullToc = document.getElementById("mi-note-floating-toc");
+    const existingMinimized = document.getElementById("mi-note-toc-minimized");
+    
+    if (existingFullToc) {
+      // 如果完整目录正在显示，不要移除它，只更新小图标的数据
+      if (existingMinimized) {
+        existingMinimized.remove();
+        createMinimizedTocIcon(headings);
+      }
+      // 不移除完整目录，让它继续显示
+    } else if (existingMinimized) {
+      // 如果只有小图标，更新小图标的数据
       existingMinimized.remove();
       createMinimizedTocIcon(headings);
+    } else {
+      // 都不存在，创建新的
+      createMinimizedTocIcon(headings);
     }
-    // 不移除完整目录，让它继续显示
-  } else if (existingMinimized) {
-    // 如果只有小图标，更新小图标的数据
-    existingMinimized.remove();
-    createMinimizedTocIcon(headings);
-  } else {
-    // 都不存在，创建新的
-    createMinimizedTocIcon(headings);
-  }
-  
-  console.log(`目录已更新：${headings.length} 个标题`);
+    
+    console.log(`目录已更新：${headings.length} 个标题`);
+  });
 }
 
 // 创建收起状态的目录图标
