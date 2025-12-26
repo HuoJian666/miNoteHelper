@@ -116,23 +116,23 @@ function expandSettingsPanel() {
   // 从本地存储加载设置
   loadSettings().then((settings) => {
     console.log("loadSettings-----", settings);
-    
-    // 创建设置面板
-    panel = document.createElement("div");
-    panel.id = "mi-note-settings-panel";
-    panel.style.cssText = `
-      position: fixed !important;
+
+  // 创建设置面板
+  panel = document.createElement("div");
+  panel.id = "mi-note-settings-panel";
+  panel.style.cssText = `
+    position: fixed !important;
       bottom: 20px !important;
-      left: 20px !important;
-      width: 300px !important;
-      background-color: white !important;
-      border-radius: 8px !important;
-      box-shadow: 0 4px 20px rgba(0,0,0,0.15) !important;
-      padding: 16px !important;
-      z-index: 9999998 !important;
-      font-family: 'Microsoft YaHei', sans-serif !important;
-      user-select: none !important;
-    `;
+    left: 20px !important;
+    width: 300px !important;
+    background-color: white !important;
+    border-radius: 8px !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.15) !important;
+    padding: 16px !important;
+    z-index: 9999998 !important;
+    font-family: 'Microsoft YaHei', sans-serif !important;
+    user-select: none !important;
+  `;
 
     // 面板内容
     panel.innerHTML = `
@@ -182,7 +182,7 @@ function expandSettingsPanel() {
     // 鼠标移出面板时，收起
     panel.addEventListener("mouseleave", function() {
       collapseSettingsPanel();
-    });
+      });
 
     // 应用设置按钮事件
     document
@@ -244,7 +244,7 @@ function expandSettingsPanel() {
             }, 500);
           }
         });
-      });
+    });
   });
 }
 
@@ -555,15 +555,12 @@ function updateFloatingToc() {
   const existingMinimized = document.getElementById("mi-note-toc-minimized");
   
   if (existingFullToc) {
-    // 如果完整目录正在显示，先移除再重新展开
-    collapseFullToc();
-    setTimeout(() => {
+    // 如果完整目录正在显示，不要移除它，只更新小图标的数据
+    if (existingMinimized) {
+      existingMinimized.remove();
       createMinimizedTocIcon(headings);
-      // 立即展开
-      setTimeout(() => {
-        expandFullToc(headings);
-      }, 50);
-    }, 50);
+    }
+    // 不移除完整目录，让它继续显示
   } else if (existingMinimized) {
     // 如果只有小图标，更新小图标的数据
     existingMinimized.remove();
