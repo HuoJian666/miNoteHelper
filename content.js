@@ -48,17 +48,25 @@ function createFloatingButton() {
     font-size: 24px !important;
     box-shadow: 0 2px 10px rgba(0,0,0,0.2) !important;
     cursor: pointer !important;
-    z-index: 9999999 !important; /* 极高的z-index确保按钮显示在最上层 */
+    z-index: 9999999 !important;
     opacity: 0.9 !important;
     user-select: none !important;
+    transition: all 0.3s ease !important;
   `;
 
   document.body.appendChild(floatingBtn);
   console.log("按钮已添加到页面");
 
-  // 点击悬浮按钮
-  floatingBtn.addEventListener("click", function () {
-    toggleSettingsPanel();
+  // 鼠标悬停展开设置面板
+  floatingBtn.addEventListener("mouseenter", function () {
+    this.style.transform = "scale(1.1)";
+    this.style.boxShadow = "0 4px 16px rgba(0,0,0,0.3)";
+    expandSettingsPanel();
+  });
+
+  floatingBtn.addEventListener("mouseleave", function () {
+    this.style.transform = "scale(1)";
+    this.style.boxShadow = "0 2px 10px rgba(0,0,0,0.2)";
   });
 }
 
@@ -97,51 +105,39 @@ function handleSetting(settings) {
 }
 
 // 创建或显示设置面板
-function toggleSettingsPanel() {
+// 展开设置面板
+function expandSettingsPanel() {
+  // 如果设置面板已存在，不重复创建
   let panel = document.getElementById("mi-note-settings-panel");
-
-  // 如果面板已存在，切换显示/隐藏状态
   if (panel) {
-    panel.style.display = panel.style.display === "none" ? "block" : "none";
     return;
   }
-
-  // 创建设置面板
-  panel = document.createElement("div");
-  panel.id = "mi-note-settings-panel";
-  panel.style.cssText = `
-    position: fixed !important;
-    bottom: 80px !important;
-    left: 20px !important;
-    width: 300px !important;
-    background-color: white !important;
-    border-radius: 8px !important;
-    box-shadow: 0 4px 20px rgba(0,0,0,0.15) !important;
-    padding: 16px !important;
-    z-index: 9999998 !important;
-    font-family: 'Microsoft YaHei', sans-serif !important;
-    animation: mi-panel-slide-in 0.3s ease !important;
-    user-select: none !important;
-  `;
-
-  // 添加CSS动画
-  const style = document.createElement("style");
-  style.textContent = `
-    @keyframes mi-panel-slide-in {
-      from { opacity: 0; transform: translateY(20px); }
-      to { opacity: 1; transform: translateY(0); }
-    }
-  `;
-  document.head.appendChild(style);
 
   // 从本地存储加载设置
   loadSettings().then((settings) => {
     console.log("loadSettings-----", settings);
+    
+    // 创建设置面板
+    panel = document.createElement("div");
+    panel.id = "mi-note-settings-panel";
+    panel.style.cssText = `
+      position: fixed !important;
+      bottom: 20px !important;
+      left: 20px !important;
+      width: 300px !important;
+      background-color: white !important;
+      border-radius: 8px !important;
+      box-shadow: 0 4px 20px rgba(0,0,0,0.15) !important;
+      padding: 16px !important;
+      z-index: 9999998 !important;
+      font-family: 'Microsoft YaHei', sans-serif !important;
+      user-select: none !important;
+    `;
+
     // 面板内容
     panel.innerHTML = `
       <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px;">
         <h3 style="margin: 0; color: #333; font-size: 16px;">小米便签增强设置</h3>
-        <div id="close-panel-btn" style="cursor: pointer; font-size: 20px; color: #999;">×</div>
       </div>
       
       <div style="margin-bottom: 15px;">
@@ -183,12 +179,10 @@ function toggleSettingsPanel() {
 
     document.body.appendChild(panel);
 
-    // 关闭按钮事件
-    document
-      .getElementById("close-panel-btn")
-      .addEventListener("click", function () {
-        panel.style.display = "none";
-      });
+    // 鼠标移出面板时，收起
+    panel.addEventListener("mouseleave", function() {
+      collapseSettingsPanel();
+    });
 
     // 应用设置按钮事件
     document
@@ -240,31 +234,36 @@ function toggleSettingsPanel() {
             }`
           );
 
-          // 隐藏面板
-          panel.style.display = "none";
+          // 收起面板
+          collapseSettingsPanel();
           
           // 如果需要显示，刷新页面以重新显示被隐藏的元素
           if (!hideAllFolder || !hideUnclassified) {
             setTimeout(() => {
               location.reload();
-            }, 100);
+            }, 500);
           }
         });
       });
-
-    // 点击面板外部关闭面板
-    document.addEventListener("click", function (event) {
-      if (panel.style.display !== "none") {
-        // 检查点击是否在面板内或在按钮上
-        if (
-          !panel.contains(event.target) &&
-          event.target.id !== "mi-note-helper-btn"
-        ) {
-          panel.style.display = "none";
-        }
-      }
-    });
   });
+}
+
+// 收起设置面板
+function collapseSettingsPanel() {
+  const panel = document.getElementById("mi-note-settings-panel");
+  if (panel) {
+    panel.remove();
+  }
+}
+
+// 兼容旧代码：toggleSettingsPanel 函数保留但改为调用新函数
+function toggleSettingsPanel() {
+  const panel = document.getElementById("mi-note-settings-panel");
+  if (panel) {
+    collapseSettingsPanel();
+  } else {
+    expandSettingsPanel();
+  }
 }
 
 // 保存设置到本地存储
@@ -669,10 +668,6 @@ function expandFullToc(headings) {
   `;
   tocTitle.innerHTML = `
     <span>📑 目录 (${headings.length})</span>
-    <div>
-      <span id="mi-toc-refresh-btn" style="cursor: pointer; color: #ff6700; font-size: 14px; margin-right: 8px;" title="刷新目录">🔄</span>
-      <span id="mi-toc-minimize-btn" style="cursor: pointer; color: #999; font-size: 18px;" title="收起">－</span>
-    </div>
   `;
   tocContainer.appendChild(tocTitle);
   
@@ -778,19 +773,6 @@ function expandFullToc(headings) {
   
   // 鼠标移出完整目录时，收起
   tocContainer.addEventListener("mouseleave", function() {
-    collapseFullToc();
-  });
-  
-  // 刷新按钮事件
-  document.getElementById("mi-toc-refresh-btn").addEventListener("click", function(e) {
-    e.stopPropagation();
-    console.log("手动刷新目录");
-    createFloatingToc();
-  });
-  
-  // 收起按钮事件
-  document.getElementById("mi-toc-minimize-btn").addEventListener("click", function(e) {
-    e.stopPropagation();
     collapseFullToc();
   });
 }
