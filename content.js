@@ -441,7 +441,7 @@ function hideSystemAndAll(hideAllFolder, hideUnclassified) {
 
 // 创建悬浮目录
 function createFloatingToc() {
-  // 如果已存在，先移除
+  // 如果已存在完整目录，先移除
   removeFloatingToc();
   
   console.log("开始创建悬浮目录...");
@@ -497,6 +497,7 @@ function createFloatingToc() {
     font-family: 'Microsoft YaHei', sans-serif !important;
     overflow-y: auto !important;
     border: 2px solid #ff6700 !important;
+    transition: all 0.3s ease !important;
   `;
   
   // 创建标题
@@ -516,13 +517,14 @@ function createFloatingToc() {
     <span>📑 目录 (${headings.length})</span>
     <div>
       <span id="mi-toc-refresh-btn" style="cursor: pointer; color: #ff6700; font-size: 14px; margin-right: 8px;" title="刷新目录">🔄</span>
-      <span id="mi-toc-close-btn" style="cursor: pointer; color: #999; font-size: 16px;" title="关闭">×</span>
+      <span id="mi-toc-minimize-btn" style="cursor: pointer; color: #999; font-size: 18px;" title="收起">－</span>
     </div>
   `;
   tocContainer.appendChild(tocTitle);
   
   // 创建目录列表
   const tocList = document.createElement("div");
+  tocList.id = "mi-toc-list";
   tocList.style.cssText = `
     font-size: 13px !important;
     line-height: 1.6 !important;
@@ -620,15 +622,18 @@ function createFloatingToc() {
   tocContainer.appendChild(tocList);
   document.body.appendChild(tocContainer);
   
+  // 存储标题数据，供收起后使用
+  tocContainer.dataset.headingsCount = headings.length;
+  
   // 刷新按钮事件
   document.getElementById("mi-toc-refresh-btn").addEventListener("click", function() {
     console.log("手动刷新目录");
     createFloatingToc();
   });
   
-  // 关闭按钮事件
-  document.getElementById("mi-toc-close-btn").addEventListener("click", function() {
-    removeFloatingToc();
+  // 收起按钮事件
+  document.getElementById("mi-toc-minimize-btn").addEventListener("click", function() {
+    minimizeFloatingToc();
   });
   
   console.log("悬浮目录创建成功");
@@ -640,6 +645,81 @@ function removeFloatingToc() {
   if (existingToc) {
     existingToc.remove();
     console.log("已移除悬浮目录");
+  }
+  const existingMinimized = document.getElementById("mi-note-toc-minimized");
+  if (existingMinimized) {
+    existingMinimized.remove();
+    console.log("已移除收起的目录图标");
+  }
+}
+
+// 收起悬浮目录
+function minimizeFloatingToc() {
+  const tocContainer = document.getElementById("mi-note-floating-toc");
+  if (!tocContainer) return;
+  
+  const headingsCount = tocContainer.dataset.headingsCount || "0";
+  
+  // 隐藏完整目录
+  tocContainer.style.display = "none";
+  
+  // 创建收起后的小图标
+  const minimizedIcon = document.createElement("div");
+  minimizedIcon.id = "mi-note-toc-minimized";
+  minimizedIcon.style.cssText = `
+    position: fixed !important;
+    top: 160px !important;
+    right: 20px !important;
+    width: 36px !important;
+    height: 36px !important;
+    background-color: #ff6700 !important;
+    color: white !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 16px !important;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2) !important;
+    cursor: pointer !important;
+    z-index: 9999998 !important;
+    transition: all 0.3s ease !important;
+    user-select: none !important;
+  `;
+  minimizedIcon.innerHTML = "📑";
+  minimizedIcon.title = `目录 (${headingsCount}项)`;
+  
+  // 悬停效果
+  minimizedIcon.addEventListener("mouseenter", function() {
+    this.style.transform = "scale(1.1)";
+    this.style.boxShadow = "0 4px 16px rgba(0,0,0,0.3)";
+  });
+  
+  minimizedIcon.addEventListener("mouseleave", function() {
+    this.style.transform = "scale(1)";
+    this.style.boxShadow = "0 2px 12px rgba(0,0,0,0.2)";
+  });
+  
+  // 点击展开
+  minimizedIcon.addEventListener("click", function() {
+    expandFloatingToc();
+  });
+  
+  document.body.appendChild(minimizedIcon);
+  console.log("悬浮目录已收起");
+}
+
+// 展开悬浮目录
+function expandFloatingToc() {
+  const minimizedIcon = document.getElementById("mi-note-toc-minimized");
+  const tocContainer = document.getElementById("mi-note-floating-toc");
+  
+  if (minimizedIcon) {
+    minimizedIcon.remove();
+  }
+  
+  if (tocContainer) {
+    tocContainer.style.display = "block";
+    console.log("悬浮目录已展开");
   }
 }
 
