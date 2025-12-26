@@ -13,6 +13,7 @@ const defaultSettings = {
   tocShowH3: true,
   collapseNoteList: false, // 显示笔记列表折叠按钮
   defaultCollapseNoteList: false, // 默认折叠笔记列表
+  customFolderVisibility: {}, // 自定义文件夹显示/隐藏状态 {folderName: boolean}
 };
 
 // 程序入口
@@ -95,6 +96,8 @@ function handleSetting(settings) {
   if (settings.floatingToc) {
     setTimeout(() => {
       createFloatingToc();
+      // 设置笔记切换监听器
+      setupNoteChangeObserver();
     }, 1500);
     // 再次尝试，确保内容已加载
     setTimeout(() => {
@@ -1333,3 +1336,29 @@ function removeNoteListCollapse() {
   
   console.log("笔记列表折叠功能已移除");
 }
+
+// 设置笔记切换监听器
+function setupNoteChangeObserver() {
+  // 策略：监听笔记列表区域的点击事件
+  // 小米便签的笔记列表在 .note-list-items 中
+  const noteListContainer = document.querySelector('[class*="note-list-items"]');
+  
+  if (!noteListContainer) {
+    setTimeout(() => setupNoteChangeObserver(), 1000);
+    return;
+  }
+  
+  // 使用事件委托监听所有笔记项的点击
+  noteListContainer.addEventListener('click', function(e) {
+    // 查找最近的笔记项元素
+    const noteItem = e.target.closest('[class*="note-item"]');
+    if (noteItem) {
+      console.log("检测到笔记点击");
+      // 延迟一下，确保新笔记内容已加载
+      setTimeout(() => {
+        createFloatingToc();
+      }, 800);
+    }
+  }, true); // 使用捕获阶段确保能捕获到事件
+}
+
