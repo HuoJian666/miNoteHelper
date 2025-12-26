@@ -439,9 +439,13 @@ function hideSystemAndAll(hideAllFolder, hideUnclassified) {
   });
 }
 
+// 全局变量：内容观察器和防抖计时器
+let tocContentObserver = null;
+let tocUpdateTimer = null;
+
 // 创建悬浮目录
 function createFloatingToc() {
-  // 如果已存在完整目录，先移除
+  // 如果已存在，先移除
   removeFloatingToc();
   
   console.log("开始创建悬浮目录...");
@@ -469,6 +473,9 @@ function createFloatingToc() {
     // 提取内容区域的标题
     const contentHeadings = extractHeadingsFromContent(noteContent);
     headings = headings.concat(contentHeadings);
+    
+    // 设置内容监听器，自动更新目录
+    setupTocContentObserver(noteContent);
   } else {
     console.log("未找到笔记内容区域，仅使用便签标题");
   }
@@ -479,6 +486,154 @@ function createFloatingToc() {
   }
   
   console.log(`找到 ${headings.length} 个标题`);
+  
+  // 先创建收起状态的小图标
+  createMinimizedTocIcon(headings);
+  
+  console.log("悬浮目录创建成功（默认收起状态）");
+}
+
+// 设置内容观察器，监听笔记内容变化
+function setupTocContentObserver(noteContent) {
+  // 如果已存在观察器，先断开
+  if (tocContentObserver) {
+    tocContentObserver.disconnect();
+  }
+  
+  // 创建 MutationObserver 监听内容变化
+  tocContentObserver = new MutationObserver((mutations) => {
+    // 使用防抖，避免频繁更新
+    clearTimeout(tocUpdateTimer);
+    tocUpdateTimer = setTimeout(() => {
+      console.log("检测到内容变化，更新目录...");
+      updateFloatingToc();
+    }, 500); // 500ms 防抖延迟
+  });
+  
+  // 开始观察
+  tocContentObserver.observe(noteContent, {
+    childList: true,        // 监听子节点的添加/删除
+    subtree: true,          // 监听所有后代节点
+    characterData: true,    // 监听文本内容变化
+    attributes: true,       // 监听属性变化（如 class 变化）
+    attributeFilter: ['class'] // 只监听 class 属性（标题级别可能通过 class 改变）
+  });
+  
+  console.log("内容监听器已设置");
+}
+
+// 更新悬浮目录（保持当前展开/收起状态）
+function updateFloatingToc() {
+  // 提取最新的标题
+  let headings = [];
+  const noteTitle = document.querySelector('.title-textarea');
+  if (noteTitle) {
+    const titleText = noteTitle.textContent.trim();
+    if (titleText) {
+      headings.push({
+        text: titleText,
+        level: 1,
+        element: noteTitle,
+        isNoteTitle: true
+      });
+    }
+  }
+  
+  const noteContent = findNoteContentArea();
+  if (noteContent) {
+    const contentHeadings = extractHeadingsFromContent(noteContent);
+    headings = headings.concat(contentHeadings);
+  }
+  
+  if (headings.length === 0) {
+    console.log("没有标题，移除目录");
+    removeFloatingToc();
+    return;
+  }
+  
+  // 检查当前是否有展开的完整目录
+  const existingFullToc = document.getElementById("mi-note-floating-toc");
+  const existingMinimized = document.getElementById("mi-note-toc-minimized");
+  
+  if (existingFullToc) {
+    // 如果完整目录正在显示，先移除再重新展开
+    collapseFullToc();
+    setTimeout(() => {
+      createMinimizedTocIcon(headings);
+      // 立即展开
+      setTimeout(() => {
+        expandFullToc(headings);
+      }, 50);
+    }, 50);
+  } else if (existingMinimized) {
+    // 如果只有小图标，更新小图标的数据
+    existingMinimized.remove();
+    createMinimizedTocIcon(headings);
+  } else {
+    // 都不存在，创建新的
+    createMinimizedTocIcon(headings);
+  }
+  
+  console.log(`目录已更新：${headings.length} 个标题`);
+}
+
+// 创建收起状态的目录图标
+function createMinimizedTocIcon(headings) {
+  // 先移除可能存在的图标
+  const existingIcon = document.getElementById("mi-note-toc-minimized");
+  if (existingIcon) {
+    existingIcon.remove();
+  }
+  
+  const minimizedIcon = document.createElement("div");
+  minimizedIcon.id = "mi-note-toc-minimized";
+  minimizedIcon.style.cssText = `
+    position: fixed !important;
+    top: 160px !important;
+    right: 20px !important;
+    width: 36px !important;
+    height: 36px !important;
+    background-color: #ff6700 !important;
+    color: white !important;
+    border-radius: 50% !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 16px !important;
+    box-shadow: 0 2px 10px rgba(0,0,0,0.2) !important;
+    cursor: pointer !important;
+    z-index: 9999998 !important;
+    transition: all 0.3s ease !important;
+    user-select: none !important;
+  `;
+  minimizedIcon.innerHTML = "📑";
+  minimizedIcon.title = `目录 (${headings.length}项)`;
+  
+  // 存储标题数据
+  minimizedIcon.dataset.headings = JSON.stringify(headings);
+  
+  // 悬停效果
+  minimizedIcon.addEventListener("mouseenter", function() {
+    this.style.transform = "scale(1.1)";
+    this.style.boxShadow = "0 4px 16px rgba(0,0,0,0.3)";
+    // 鼠标悬停时展开完整目录
+    expandFullToc(headings);
+  });
+  
+  minimizedIcon.addEventListener("mouseleave", function() {
+    this.style.transform = "scale(1)";
+    this.style.boxShadow = "0 2px 10px rgba(0,0,0,0.2)";
+  });
+  
+  document.body.appendChild(minimizedIcon);
+}
+
+// 展开完整目录
+function expandFullToc(headings) {
+  // 如果完整目录已存在，不重复创建
+  if (document.getElementById("mi-note-floating-toc")) {
+    return;
+  }
   
   // 创建目录容器
   const tocContainer = document.createElement("div");
@@ -493,11 +648,10 @@ function createFloatingToc() {
     border-radius: 8px !important;
     box-shadow: 0 2px 12px rgba(0,0,0,0.15) !important;
     padding: 12px !important;
-    z-index: 9999997 !important;
+    z-index: 9999999 !important;
     font-family: 'Microsoft YaHei', sans-serif !important;
     overflow-y: auto !important;
     border: 2px solid #ff6700 !important;
-    transition: all 0.3s ease !important;
   `;
   
   // 创建标题
@@ -583,7 +737,7 @@ function createFloatingToc() {
       tocItem.appendChild(icon);
     }
     
-    tocItem.title = heading.text; // 添加完整标题作为提示
+    tocItem.title = heading.text;
     
     // 点击跳转
     tocItem.addEventListener("click", function() {
@@ -622,24 +776,34 @@ function createFloatingToc() {
   tocContainer.appendChild(tocList);
   document.body.appendChild(tocContainer);
   
-  // 存储标题数据，供收起后使用
-  tocContainer.dataset.headingsCount = headings.length;
+  // 鼠标移出完整目录时，收起
+  tocContainer.addEventListener("mouseleave", function() {
+    collapseFullToc();
+  });
   
   // 刷新按钮事件
-  document.getElementById("mi-toc-refresh-btn").addEventListener("click", function() {
+  document.getElementById("mi-toc-refresh-btn").addEventListener("click", function(e) {
+    e.stopPropagation();
     console.log("手动刷新目录");
     createFloatingToc();
   });
   
   // 收起按钮事件
-  document.getElementById("mi-toc-minimize-btn").addEventListener("click", function() {
-    minimizeFloatingToc();
+  document.getElementById("mi-toc-minimize-btn").addEventListener("click", function(e) {
+    e.stopPropagation();
+    collapseFullToc();
   });
-  
-  console.log("悬浮目录创建成功");
 }
 
-// 移除悬浮目录
+// 收起完整目录
+function collapseFullToc() {
+  const tocContainer = document.getElementById("mi-note-floating-toc");
+  if (tocContainer) {
+    tocContainer.remove();
+  }
+}
+
+// 移除悬浮目录（包括收起图标）
 function removeFloatingToc() {
   const existingToc = document.getElementById("mi-note-floating-toc");
   if (existingToc) {
@@ -651,75 +815,18 @@ function removeFloatingToc() {
     existingMinimized.remove();
     console.log("已移除收起的目录图标");
   }
-}
-
-// 收起悬浮目录
-function minimizeFloatingToc() {
-  const tocContainer = document.getElementById("mi-note-floating-toc");
-  if (!tocContainer) return;
   
-  const headingsCount = tocContainer.dataset.headingsCount || "0";
-  
-  // 隐藏完整目录
-  tocContainer.style.display = "none";
-  
-  // 创建收起后的小图标
-  const minimizedIcon = document.createElement("div");
-  minimizedIcon.id = "mi-note-toc-minimized";
-  minimizedIcon.style.cssText = `
-    position: fixed !important;
-    top: 160px !important;
-    right: 20px !important;
-    width: 36px !important;
-    height: 36px !important;
-    background-color: #ff6700 !important;
-    color: white !important;
-    border-radius: 50% !important;
-    display: flex !important;
-    align-items: center !important;
-    justify-content: center !important;
-    font-size: 16px !important;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.2) !important;
-    cursor: pointer !important;
-    z-index: 9999998 !important;
-    transition: all 0.3s ease !important;
-    user-select: none !important;
-  `;
-  minimizedIcon.innerHTML = "📑";
-  minimizedIcon.title = `目录 (${headingsCount}项)`;
-  
-  // 悬停效果
-  minimizedIcon.addEventListener("mouseenter", function() {
-    this.style.transform = "scale(1.1)";
-    this.style.boxShadow = "0 4px 16px rgba(0,0,0,0.3)";
-  });
-  
-  minimizedIcon.addEventListener("mouseleave", function() {
-    this.style.transform = "scale(1)";
-    this.style.boxShadow = "0 2px 12px rgba(0,0,0,0.2)";
-  });
-  
-  // 点击展开
-  minimizedIcon.addEventListener("click", function() {
-    expandFloatingToc();
-  });
-  
-  document.body.appendChild(minimizedIcon);
-  console.log("悬浮目录已收起");
-}
-
-// 展开悬浮目录
-function expandFloatingToc() {
-  const minimizedIcon = document.getElementById("mi-note-toc-minimized");
-  const tocContainer = document.getElementById("mi-note-floating-toc");
-  
-  if (minimizedIcon) {
-    minimizedIcon.remove();
+  // 清理观察器
+  if (tocContentObserver) {
+    tocContentObserver.disconnect();
+    tocContentObserver = null;
+    console.log("已清理内容观察器");
   }
   
-  if (tocContainer) {
-    tocContainer.style.display = "block";
-    console.log("悬浮目录已展开");
+  // 清理定时器
+  if (tocUpdateTimer) {
+    clearTimeout(tocUpdateTimer);
+    tocUpdateTimer = null;
   }
 }
 
