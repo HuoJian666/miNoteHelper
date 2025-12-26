@@ -13,6 +13,7 @@ const defaultSettings = {
   tocShowH3: true,
   collapseNoteList: false, // 显示笔记列表折叠按钮
   defaultCollapseNoteList: false, // 默认折叠笔记列表
+  customFolderVisibility: {}, // 自定义文件夹显示/隐藏状态 {folderName: boolean}
 };
 
 // 程序入口
@@ -82,19 +83,31 @@ function handleSetting(settings) {
   
   // 延迟后再次尝试（DOM可能还未完全加载）
   setTimeout(() => {
-    console.log("延迟500ms后再次尝试隐藏");
+    console.log("延迟500ms后再次尝试隐藏);
     hideSystemAndAll(settings.hideAllFolder, settings.hideUnclassified);
   }, 500);
   
   setTimeout(() => {
-    console.log("延迟1500ms后再次尝试隐藏");
+    console.log("延迟1500ms后再次尝试隐藏);
     hideSystemAndAll(settings.hideAllFolder, settings.hideUnclassified);
   }, 1500);
+  
+  // 应用自定义文件夹显示设置
+  if (settings.customFolderVisibility && Object.keys(settings.customFolderVisibility).length > 0) {
+    setTimeout(() => {
+      applyCustomFolderVisibility(settings.customFolderVisibility);
+    }, 500);
+    setTimeout(() => {
+      applyCustomFolderVisibility(settings.customFolderVisibility);
+    }, 2000);
+  }
   
   // 应用悬浮目录设置
   if (settings.floatingToc) {
     setTimeout(() => {
       createFloatingToc();
+      // 设置笔记切换监听器
+      setupNoteChangeObserver();
     }, 1500);
     // 再次尝试，确保内容已加载
     setTimeout(() => {
@@ -164,12 +177,25 @@ function expandSettingsPanel() {
           }>
         </label>
         
-        <label style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0 8px 12px;">
-          <span style="color: #666; font-size: 13px;">隐藏未分类</span>
+        <label style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0 8px 12px; border-bottom: 1px solid #f5f5f5;">
+          <span style="color: #666; font-size: 13px;">隐藏未分类/span>
           <input type="checkbox" id="setting-hide-unclassified" style="width: 18px; height: 18px;" ${
             settings.hideUnclassified ? "checked" : ""
           }>
         </label>
+        
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0 8px 12px;">
+          <span style="color: #666; font-size: 13px;">自定义目录显示/span>
+          <button id="manage-folders-btn" style="
+            background-color: #ff6700;
+            color: white;
+            border: none;
+            padding: 4px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+          ">管理</button>
+        </div>
       </div>
       
       <!-- 悬浮目录设置分组 -->
@@ -242,6 +268,11 @@ function expandSettingsPanel() {
     `;
 
     document.body.appendChild(panel);
+
+    // 添加文件夹管理按钮事件
+    document.getElementById("manage-folders-btn").addEventListener("click", function() {
+      openFolderManagementDialog();
+    });
 
     // 添加折叠按钮的联动逻辑
     const collapseNoteListCheckbox = document.getElementById("setting-collapse-note-list");
@@ -331,14 +362,14 @@ function expandSettingsPanel() {
 
           // 显示已应用提示
           alert(
-            `设置已应用!\n隐藏全部笔记: ${
-              hideAllFolder ? "开启" : "关闭"
-            }\n隐藏未分类: ${hideUnclassified ? "开启" : "关闭"}\n悬浮目录: ${
-              floatingToc ? "开启" : "关闭"
+            `设置已应用\n隐藏全部笔记: ${
+              hideAllFolder ? "开启 : "关闭"
+            }\n隐藏未分类 ${hideUnclassified ? "开启 : "关闭"}\n悬浮目录: ${
+              floatingToc ? "开启 : "关闭"
             }\n显示笔记列表折叠按钮: ${
-              collapseNoteList ? "开启" : "关闭"
+              collapseNoteList ? "开启 : "关闭"
             }\n默认折叠笔记列表: ${
-              defaultCollapseNoteList ? "开启" : "关闭"
+              defaultCollapseNoteList ? "开启 : "关闭"
             }`
           );
 
@@ -378,6 +409,15 @@ function toggleSettingsPanel() {
 function saveSettings(settings) {
   return new Promise((resolve) => {
     try {
+      // 首先检查扩展上下文是否有效
+      if (!isExtensionContextValid()) {
+        console.warn("扩展上下文已失效，使用 localStorage");
+        localStorage.setItem("miNoteSettings", JSON.stringify(settings));
+        console.log("使用localStorage保存设置（扩展上下文失效）);
+        resolve();
+        return;
+      }
+      
       // 检查chrome.storage是否可用
       if (
         typeof chrome !== "undefined" &&
@@ -385,7 +425,10 @@ function saveSettings(settings) {
         chrome.storage.sync
       ) {
         chrome.storage.sync.set({ miNoteSettings: settings }, function () {
-          console.log("设置已保存");
+          if (chrome.runtime.lastError) {
+            console.error("chrome.storage error:", chrome.runtime.lastError);
+          }
+          console.log("设置已保存);
           resolve();
         });
       } else {
@@ -395,16 +438,37 @@ function saveSettings(settings) {
         resolve();
       }
     } catch (error) {
-      console.error("保存设置时出错:", error);
+      console.error("保存设置时出错", error);
       resolve(); // 即使出错也继续执行
     }
   });
+}
+
+// 检查扩展上下文是否有效
+function isExtensionContextValid() {
+  try {
+    // 尝试访问 chrome.runtime.id，如果上下文失效会抛出错误
+    return !!(chrome && chrome.runtime && chrome.runtime.id);
+  } catch (error) {
+    return false;
+  }
 }
 
 // 从本地存储加载设置
 function loadSettings() {
   return new Promise((resolve) => {
     try {
+      // 首先检查扩展上下文是否有效
+      if (!isExtensionContextValid()) {
+        console.warn("扩展上下文已失效，使用 localStorage");
+        const savedSettings = localStorage.getItem("miNoteSettings");
+        const settings = savedSettings
+          ? { ...defaultSettings, ...JSON.parse(savedSettings) }
+          : defaultSettings;
+        resolve(settings);
+        return;
+      }
+      
       // 检查chrome.storage是否可用，尝试从chrome.storage加载设置
       if (
         typeof chrome !== "undefined" &&
@@ -412,9 +476,15 @@ function loadSettings() {
         chrome.storage.sync
       ) {
         chrome.storage.sync.get("miNoteSettings", function (result) {
+          // 检查是否有 chrome.runtime.lastError
+          if (chrome.runtime.lastError) {
+            console.error("chrome.storage error:", chrome.runtime.lastError);
+            resolve(defaultSettings);
+            return;
+          }
           // 合并默认设置和已保存的设置（确保新字段有默认值）
           const settings = { ...defaultSettings, ...(result.miNoteSettings || {}) };
-          console.log("从chrome.storage加载的设置:", settings);
+          console.log("从chrome.storage加载的设置", settings);
           resolve(settings);
           return;
         });
@@ -432,7 +502,7 @@ function loadSettings() {
       );
       resolve(settings);
     } catch (error) {
-      console.error("加载设置时出错:", error);
+      console.error("加载设置时出错", error);
       resolve(defaultSettings);
     }
   });
@@ -491,7 +561,7 @@ function getUsefulTempFolder() {
 
   sidebarItems.forEach((item) => {
     if (item.textContent.includes("b-有用暂存")) {
-      console.log("找到有用暂存文件夹元素:", item);
+      console.log("找到有用暂存文件夹元素", item);
       targetItem = item;
     }
   });
@@ -509,11 +579,11 @@ function getUsefulTempFolder() {
 function clickUsefulTempFolder() {
   const folderElement = getUsefulTempFolder();
   if (folderElement) {
-    console.log("点击有用暂存文件夹");
+    console.log("点击有用暂存文件夹);
     folderElement.click();
     return true;
   } else {
-    console.log("未找到有用暂存文件夹，无法点击");
+    console.log("未找到有用暂存文件夹，无法点击);
     return false;
   }
 }
@@ -532,30 +602,31 @@ function hideSystemAndAll(hideAllFolder, hideUnclassified) {
     const text = item.textContent.trim();
     if (hideAllFolder && text.includes("全部笔记")) {
       targetItems.push(item);
-      console.log("找到并准备隐藏: 全部笔记");
+      console.log("找到并准备隐藏 全部笔记");
     }
-    if (hideUnclassified && text.includes("未分类")) {
+    if (hideUnclassified && text.includes("未分类)) {
       targetItems.push(item);
-      console.log("找到并准备隐藏: 未分类");
+      console.log("找到并准备隐藏 未分类);
     }
   });
 
   targetItems.forEach((item) => {
     item.style.display = "none";
-    console.log("已隐藏:", item.textContent.trim());
+    console.log("已隐藏", item.textContent.trim());
   });
 }
 
 // 全局变量：内容观察器和防抖计时器
 let tocContentObserver = null;
 let tocUpdateTimer = null;
+let noteChangeObserver = null; // 监听笔记切换的观察器
 
 // 创建悬浮目录
 function createFloatingToc() {
   // 如果已存在，先移除
   removeFloatingToc();
   
-  console.log("开始创建悬浮目录...");
+  console.log("开始创建悬浮目录..");
   
   // 加载设置以获取过滤选项
   loadSettings().then((settings) => {
@@ -578,7 +649,7 @@ function createFloatingToc() {
     // 查找笔记内容区域
     const noteContent = findNoteContentArea();
     if (noteContent) {
-      console.log("找到笔记内容区域，继续提取内容中的标题");
+      console.log("找到笔记内容区域，继续提取内容中的标题);
       // 提取内容区域的标题
       const contentHeadings = extractHeadingsFromContent(noteContent);
       headings = headings.concat(contentHeadings);
@@ -586,7 +657,7 @@ function createFloatingToc() {
       // 设置内容监听器，自动更新目录
       setupTocContentObserver(noteContent);
     } else {
-      console.log("未找到笔记内容区域，仅使用便签标题");
+      console.log("未找到笔记内容区域，仅使用便签标题);
     }
     
     // 根据设置过滤标题
@@ -624,7 +695,7 @@ function setupTocContentObserver(noteContent) {
     // 使用防抖，避免频繁更新
     clearTimeout(tocUpdateTimer);
     tocUpdateTimer = setTimeout(() => {
-      console.log("检测到内容变化，更新目录...");
+      console.log("检测到内容变化，更新目录..");
       updateFloatingToc();
     }, 500); // 500ms 防抖延迟
   });
@@ -676,7 +747,7 @@ function updateFloatingToc() {
     console.log(`应用标题级别过滤，剩余 ${headings.length} 个标题`);
     
     if (headings.length === 0) {
-      console.log("没有标题，移除目录");
+      console.log("没有标题，移除目录);
       removeFloatingToc();
       return;
     }
@@ -735,7 +806,7 @@ function createMinimizedTocIcon(headings) {
     user-select: none !important;
   `;
   minimizedIcon.innerHTML = "📑";
-  minimizedIcon.title = `目录 (${headings.length}项)`;
+  minimizedIcon.title = `目录 (${headings.length}▶`;
   
   // 存储标题数据
   minimizedIcon.dataset.headings = JSON.stringify(headings);
@@ -744,8 +815,9 @@ function createMinimizedTocIcon(headings) {
   minimizedIcon.addEventListener("mouseenter", function() {
     this.style.transform = "scale(1.1)";
     this.style.boxShadow = "0 4px 16px rgba(0,0,0,0.3)";
-    // 鼠标悬停时展开完整目录
-    expandFullToc(headings);
+    // 鼠标悬停时展开完整目录，从 dataset 读取最新的标题数据
+    const latestHeadings = JSON.parse(this.dataset.headings || '[]');
+    expandFullToc(latestHeadings);
   });
   
   minimizedIcon.addEventListener("mouseleave", function() {
@@ -865,8 +937,31 @@ function expandFullToc(headings) {
     
     // 点击跳转
     tocItem.addEventListener("click", function() {
-      heading.element.scrollIntoView({ behavior: "smooth", block: "start" });
-      // 高亮当前项
+      // 重新查找元素（因为从 JSON 反序列化▶element 引用会丢失）
+      let targetElement = null;
+      if (heading.isNoteTitle) {
+        // 如果是便签标题，查找 .title-textarea
+        targetElement = document.querySelector(".title-textarea");
+      } else {
+        // 否则，根据文本内容在当前笔记内容区查▶
+        const contentArea = findNoteContentArea();
+        if (contentArea) {
+          const allElements = contentArea.querySelectorAll("p, h1, h2, h3, h4, h5, h6");
+          for (const el of allElements) {
+            if (el.textContent.trim() === heading.text) {
+              targetElement = el;
+              break;
+            }
+          }
+        }
+      }
+      
+      // 执行滚动
+      if (targetElement && typeof targetElement.scrollIntoView === 'function') {
+        targetElement.scrollIntoView({ behavior: "smooth", block: "start" });
+      }
+      
+      // 高亮当前▶
       tocList.querySelectorAll("div").forEach(item => {
         item.style.backgroundColor = "";
         const firstSpan = item.querySelector('span');
@@ -919,7 +1014,7 @@ function removeFloatingToc() {
   const existingToc = document.getElementById("mi-note-floating-toc");
   if (existingToc) {
     existingToc.remove();
-    console.log("已移除悬浮目录");
+    console.log("已移除悬浮目▶);
   }
   const existingMinimized = document.getElementById("mi-note-toc-minimized");
   if (existingMinimized) {
@@ -927,14 +1022,14 @@ function removeFloatingToc() {
     console.log("已移除收起的目录图标");
   }
   
-  // 清理观察器
+  // 清理观察▶
   if (tocContentObserver) {
     tocContentObserver.disconnect();
     tocContentObserver = null;
     console.log("已清理内容观察器");
   }
   
-  // 清理定时器
+  // 清理定时▶
   if (tocUpdateTimer) {
     clearTimeout(tocUpdateTimer);
     tocUpdateTimer = null;
@@ -943,14 +1038,14 @@ function removeFloatingToc() {
 
 // 查找笔记内容区域
 function findNoteContentArea() {
-  // 优先查找小米便签的内容容器
+  // 优先查找小米便签的内容容▶
   const pmContainer = document.querySelector('.pm-container .ProseMirror');
   if (pmContainer) {
     console.log("找到笔记内容区域: .pm-container .ProseMirror", pmContainer);
     return pmContainer;
   }
   
-  // 尝试查找其他可能的容器
+  // 尝试查找其他可能的容▶
   const selectors = [
     '.pm-container',
     '.ProseMirror',
@@ -975,7 +1070,7 @@ function findNoteContentArea() {
       if (element.classList.contains('title-textarea')) {
         continue;
       }
-      // 检查元素是否包含实际内容
+      // 检查元素是否包含实际内▶
       if (element && element.textContent.trim().length > 10) {
         console.log("找到笔记内容区域:", selector, element);
         console.log("内容预览:", element.textContent.substring(0, 100));
@@ -984,7 +1079,7 @@ function findNoteContentArea() {
     }
   }
   
-  // 如果上述方法都失败，尝试查找最大的可编辑区域
+  // 如果上述方法都失败，尝试查找最大的可编辑区▶
   const editableElements = document.querySelectorAll('[contenteditable="true"]');
   let largestElement = null;
   let maxLength = 0;
@@ -1007,7 +1102,7 @@ function findNoteContentArea() {
     return largestElement;
   }
   
-  console.error("未找到笔记内容区域，已尝试所有选择器");
+  console.error("未找到笔记内容区域，已尝试所有选择▶);
   return null;
 }
 
@@ -1017,7 +1112,7 @@ function extractHeadings(container) {
   
   console.log("开始提取标题，容器:", container);
   
-  // 方法0: 首先查找小米便签的标题
+  // 方法0: 首先查找小米便签的标▶
   const noteTitle = document.querySelector('.title-textarea');
   if (noteTitle) {
     const titleText = noteTitle.textContent.trim();
@@ -1041,14 +1136,14 @@ function extractHeadings(container) {
 function extractHeadingsFromContent(container) {
   const headings = [];
   
-  // 方法0: 优先查找小米便签的标题格式 (pm-size-* 类名)
+  // 方法0: 优先查找小米便签的标题格▶(pm-size-* 类名)
   const pmSizeElements = container.querySelectorAll('p[class*="pm-size-"]');
   console.log("找到pm-size-*元素数量:", pmSizeElements.length);
   
   pmSizeElements.forEach((element) => {
     const text = element.textContent.trim();
     if (text && !element.classList.contains('title-textarea')) {
-      let level = 3; // 默认为 h3
+      let level = 3; // 默认▶h3
       
       // 根据 pm-size 类名判断级别
       if (element.classList.contains('pm-size-large')) {
@@ -1068,7 +1163,7 @@ function extractHeadingsFromContent(container) {
     }
   });
   
-  // 方法1: 查找真实的 h1, h2, h3 标签
+  // 方法1: 查找真实▶h1, h2, h3 标签
   const htmlHeadings = container.querySelectorAll("h1, h2, h3, h4, h5, h6");
   console.log("找到HTML标题标签数量:", htmlHeadings.length);
   
@@ -1089,7 +1184,7 @@ function extractHeadingsFromContent(container) {
     }
   });
   
-  // 方法2: 查找具有标题样式的元素（作为后备方案）
+  // 方法2: 查找具有标题样式的元素（作为后备方案▶
   if (headings.length === 0) {
     const possibleHeadingSelectors = [
       '[class*="heading"]',
@@ -1103,11 +1198,11 @@ function extractHeadingsFromContent(container) {
     possibleHeadingSelectors.forEach(selector => {
       try {
         const elements = container.querySelectorAll(selector);
-        console.log(`查找选择器 ${selector}:`, elements.length);
+        console.log(`查找选择▶${selector}:`, elements.length);
         
         elements.forEach(element => {
           const text = element.textContent.trim();
-          // 避免把便签标题重复添加
+          // 避免把便签标题重复添▶
           if (text && text.length > 0 && text.length < 100 && 
               !element.classList.contains('title-textarea')) {
             // 避免重复添加
@@ -1125,12 +1220,12 @@ function extractHeadingsFromContent(container) {
           }
         });
       } catch (e) {
-        console.error("查找标题时出错:", selector, e);
+        console.error("查找标题时出▶", selector, e);
       }
     });
   }
   
-  // 方法3: 根据字体大小查找可能的标题（作为后备方案）
+  // 方法3: 根据字体大小查找可能的标题（作为后备方案▶
   if (headings.length === 0) {
     console.log("尝试根据字体大小查找标题...");
     const allElements = container.querySelectorAll('p, div, span');
@@ -1146,7 +1241,7 @@ function extractHeadingsFromContent(container) {
       const fontSize = parseFloat(style.fontSize);
       const fontWeight = style.fontWeight;
       
-      // 如果字体较大或加粗，可能是标题
+      // 如果字体较大或加粗，可能是标▶
       if (text && text.length > 0 && text.length < 100 && 
           (fontSize > 16 || fontWeight === 'bold' || parseInt(fontWeight) >= 600)) {
         
@@ -1170,7 +1265,7 @@ function extractHeadingsFromContent(container) {
 
 // 判断标题级别
 function determineHeadingLevel(element) {
-  // 检查data属性
+  // 检查data属▶
   const dataLevel = element.getAttribute('data-level');
   if (dataLevel) {
     return parseInt(dataLevel);
@@ -1182,7 +1277,7 @@ function determineHeadingLevel(element) {
   if (className.includes('pm-size-middle')) return 2;
   if (className.includes('pm-size-h3')) return 3;
   
-  // 检查标准类名
+  // 检查标准类▶
   if (className.includes('h1') || className.includes('heading-1')) return 1;
   if (className.includes('h2') || className.includes('heading-2')) return 2;
   if (className.includes('h3') || className.includes('heading-3')) return 3;
@@ -1201,10 +1296,10 @@ function setupNoteListCollapse(isDefaultCollapsed) {
   // 移除旧的按钮（如果存在）
   removeNoteListCollapse();
   
-  // 创建控制按钮（在笔记主体左侧）
+  // 创建控制按钮（在笔记主体左侧▶
   createNoteListCollapseButton(isDefaultCollapsed);
   
-  console.log("笔记列表折叠功能已启用，默认折叠状态:", isDefaultCollapsed);
+  console.log("笔记列表折叠功能已启用，默认折叠状▶", isDefaultCollapsed);
 }
 
 // 创建折叠控制按钮
@@ -1228,7 +1323,7 @@ function createNoteListCollapseButton(isDefaultCollapsed) {
   // 创建按钮
   const collapseBtn = document.createElement("div");
   collapseBtn.id = "mi-note-list-collapse-btn";
-  collapseBtn.innerHTML = "▶"; // 默认显示向右箭头
+  collapseBtn.innerHTML = "▶; // 默认显示向右箭头
   collapseBtn.style.cssText = `
     position: fixed !important;
     left: 245px !important;
@@ -1269,7 +1364,7 @@ function createNoteListCollapseButton(isDefaultCollapsed) {
   document.body.appendChild(collapseBtn);
   console.log("笔记列表折叠按钮已创建，位置：left=245px, top=89px");
   
-  // 如果设置了默认折叠，则自动执行折叠
+  // 如果设置了默认折叠，则自动执行折▶
   if (isDefaultCollapsed) {
     setTimeout(() => {
       toggleNoteListCollapse();
@@ -1277,7 +1372,7 @@ function createNoteListCollapseButton(isDefaultCollapsed) {
   }
 }
 
-// 切换笔记列表折叠状态
+// 切换笔记列表折叠状▶
 function toggleNoteListCollapse() {
   const collapseBtn = document.getElementById("mi-note-list-collapse-btn");
   const noteList = document.querySelector('[class*="note-list-"]');
@@ -1304,9 +1399,9 @@ function toggleNoteListCollapse() {
     noteList.style.display = "none";
     noteContent.style.marginLeft = "0";
     noteContent.style.width = "100%";
-    collapseBtn.innerHTML = "▶";
+    collapseBtn.innerHTML = "▶;
     collapseBtn.setAttribute("data-collapsed", "true");
-    // 按钮位置保持不变，固定在原位置
+    // 按钮位置保持不变，固定在原位▶
   }
 }
 
@@ -1331,5 +1426,222 @@ function removeNoteListCollapse() {
     noteContent.style.width = "";
   }
   
-  console.log("笔记列表折叠功能已移除");
+  console.log("笔记列表折叠功能已移▶);
 }
+
+// 打开文件夹管理对话框
+function openFolderManagementDialog() {
+  // 如果对话框已存在，先移除
+  const existingDialog = document.getElementById("mi-folder-management-dialog");
+  if (existingDialog) {
+    existingDialog.remove();
+  }
+  
+  // 创建遮罩▶
+  const overlay = document.createElement("div");
+  overlay.id = "mi-folder-management-dialog";
+  overlay.style.cssText = `
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    background: rgba(0, 0, 0, 0.5) !important;
+    z-index: 99999999 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  `;
+  
+  // 创建对话▶
+  const dialog = document.createElement("div");
+  dialog.style.cssText = `
+    background: white !important;
+    border-radius: 8px !important;
+    padding: 20px !important;
+    width: 400px !important;
+    max-height: 600px !important;
+    overflow-y: auto !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important;
+  `;
+  
+  // 获取所有文件夹
+  const folders = getAllFolders();
+  
+  // 加载当前设置
+  loadSettings().then((settings) => {
+    const customVisibility = settings.customFolderVisibility || {};
+    
+    dialog.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h3 style="margin: 0; color: #333; font-size: 16px;">管理笔记目录显示</h3>
+        <button id="close-folder-dialog" style="
+          background: none;
+          border: none;
+          font-size: 24px;
+          cursor: pointer;
+          color: #999;
+          line-height: 1;
+        ">×</button>
+      </div>
+      
+      <div style="margin-bottom: 15px; padding: 10px; background: #f5f5f5; border-radius: 4px; font-size: 13px; color: #666;">
+        💡 提示：勾选表示显示该目录，取消勾选表示隐▶
+      </div>
+      
+      <div id="folder-list" style="margin-bottom: 20px;">
+        ${folders.map(folder => `
+          <label style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #f0f0f0;">
+            <span style="color: #333; font-size: 14px;">${folder}</span>
+            <input type="checkbox" class="folder-visibility-checkbox" data-folder="${folder}" 
+              ${customVisibility[folder] !== false ? "checked" : ""} 
+              style="width: 18px; height: 18px;">
+          </label>
+        `).join('')}
+      </div>
+      
+      <div style="display: flex; gap: 10px;">
+        <button id="save-folder-visibility" style="
+          flex: 1;
+          background-color: #ff6700;
+          color: white;
+          border: none;
+          padding: 10px;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 14px;
+        ">保存</button>
+        <button id="cancel-folder-dialog" style="
+          flex: 1;
+          background-color: #ccc;
+          color: white;
+          border: none;
+          padding: 10px;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 14px;
+        ">取消</button>
+      </div>
+    `;
+    
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+    
+    // 关闭按钮事件
+    document.getElementById("close-folder-dialog").addEventListener("click", function() {
+      overlay.remove();
+    });
+    
+    document.getElementById("cancel-folder-dialog").addEventListener("click", function() {
+      overlay.remove();
+    });
+    
+    // 点击遮罩层关▶
+    overlay.addEventListener("click", function(e) {
+      if (e.target === overlay) {
+        overlay.remove();
+      }
+    });
+    
+    // 保存按钮事件
+    document.getElementById("save-folder-visibility").addEventListener("click", function() {
+      const checkboxes = document.querySelectorAll(".folder-visibility-checkbox");
+      const newVisibility = {};
+      
+      checkboxes.forEach(checkbox => {
+        const folderName = checkbox.getAttribute("data-folder");
+        newVisibility[folderName] = checkbox.checked;
+      });
+      
+      // 保存设置
+      settings.customFolderVisibility = newVisibility;
+      saveSettings(settings).then(() => {
+        alert("文件夹显示设置已保存！刷新页面后生效▶);
+        overlay.remove();
+        // 应用设置
+        applyCustomFolderVisibility(newVisibility);
+      });
+    });
+  });
+}
+
+// 获取所有文件夹名称
+function getAllFolders() {
+  const folders = [];
+  const folderContainerArray = findElementsByPartialClassName(folderListContainerClassName);
+  
+  if (!folderContainerArray.length) {
+    console.log("未找到文件夹容器");
+    return folders;
+  }
+  
+  const sidebarItems = folderContainerArray[0].querySelectorAll('[class*="sidebar-item"]');
+  
+  sidebarItems.forEach((item) => {
+    const text = item.textContent.trim();
+    if (text && !folders.includes(text)) {
+      folders.push(text);
+    }
+  });
+  
+  return folders;
+}
+
+// 应用自定义文件夹显示设置
+function applyCustomFolderVisibility(customVisibility) {
+  if (!customVisibility || Object.keys(customVisibility).length === 0) {
+    return;
+  }
+  
+  const folderContainerArray = findElementsByPartialClassName(folderListContainerClassName);
+  
+  if (!folderContainerArray.length) {
+    console.log("未找到文件夹容器▶秒后重试");
+    setTimeout(() => applyCustomFolderVisibility(customVisibility), 1000);
+    return;
+  }
+  
+  const sidebarItems = folderContainerArray[0].querySelectorAll('[class*="sidebar-item"]');
+  
+  sidebarItems.forEach((item) => {
+    const text = item.textContent.trim();
+    if (customVisibility.hasOwnProperty(text)) {
+      if (customVisibility[text] === false) {
+        item.style.display = "none";
+      } else {
+        item.style.display = "";
+      }
+    }
+  });
+  
+  console.log("已应用自定义文件夹显示设▶);
+}
+
+// 设置笔记切换监听器
+function setupNoteChangeObserver() {
+  
+  // 策略：监听笔记列表区域的点击事件
+  // 小米便签的笔记列表在 .note-list-items ▶
+  const noteListContainer = document.querySelector('[class*="note-list-items"]');
+  
+  if (!noteListContainer) {
+    setTimeout(() => setupNoteChangeObserver(), 1000);
+    return;
+  }
+  
+  
+  // 使用事件委托监听所有笔记项的点▶
+  noteListContainer.addEventListener('click', function(e) {
+    // 查找最近的笔记项元▶
+    const noteItem = e.target.closest('[class*="note-item"]');
+    if (noteItem) {
+      console.log("检测到笔记点击");
+      // 延迟一下，确保新笔记内容已加载
+      setTimeout(() => {
+        createFloatingToc();
+      }, 800);
+    }
+  }, true); // 使用捕获阶段确保能捕获到事件
+  
+}
+
