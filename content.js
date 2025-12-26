@@ -92,6 +92,16 @@ function handleSetting(settings) {
     hideSystemAndAll(settings.hideAllFolder, settings.hideUnclassified);
   }, 1500);
   
+  // 应用自定义文件夹显示设置
+  if (settings.customFolderVisibility && Object.keys(settings.customFolderVisibility).length > 0) {
+    setTimeout(() => {
+      applyCustomFolderVisibility(settings.customFolderVisibility);
+    }, 500);
+    setTimeout(() => {
+      applyCustomFolderVisibility(settings.customFolderVisibility);
+    }, 2000);
+  }
+  
   // 应用悬浮目录设置
   if (settings.floatingToc) {
     setTimeout(() => {
@@ -167,12 +177,25 @@ function expandSettingsPanel() {
           }>
         </label>
         
-        <label style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0 8px 12px;">
+        <label style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0 8px 12px; border-bottom: 1px solid #f5f5f5;">
           <span style="color: #666; font-size: 13px;">隐藏未分类</span>
           <input type="checkbox" id="setting-hide-unclassified" style="width: 18px; height: 18px;" ${
             settings.hideUnclassified ? "checked" : ""
           }>
         </label>
+        
+        <div style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0 8px 12px;">
+          <span style="color: #666; font-size: 13px;">自定义目录显示</span>
+          <button id="manage-folders-btn" style="
+            background-color: #ff6700;
+            color: white;
+            border: none;
+            padding: 4px 12px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+          ">管理</button>
+        </div>
       </div>
       
       <!-- 悬浮目录设置分组 -->
@@ -245,6 +268,11 @@ function expandSettingsPanel() {
     `;
 
     document.body.appendChild(panel);
+
+    // 添加文件夹管理按钮事件
+    document.getElementById("manage-folders-btn").addEventListener("click", function() {
+      openFolderManagementDialog();
+    });
 
     // 添加折叠按钮的联动逻辑
     const collapseNoteListCheckbox = document.getElementById("setting-collapse-note-list");
@@ -1361,4 +1389,193 @@ function setupNoteChangeObserver() {
     }
   }, true); // 使用捕获阶段确保能捕获到事件
 }
+
+// 打开文件夹管理对话框
+function openFolderManagementDialog() {
+  // 如果对话框已存在，先移除
+  const existingDialog = document.getElementById("mi-folder-management-dialog");
+  if (existingDialog) {
+    existingDialog.remove();
+  }
+  
+  // 创建遮罩层
+  const overlay = document.createElement("div");
+  overlay.id = "mi-folder-management-dialog";
+  overlay.style.cssText = `
+    position: fixed !important;
+    top: 0 !important;
+    left: 0 !important;
+    width: 100% !important;
+    height: 100% !important;
+    background: rgba(0, 0, 0, 0.5) !important;
+    z-index: 99999999 !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+  `;
+  
+  // 创建对话框
+  const dialog = document.createElement("div");
+  dialog.style.cssText = `
+    background: white !important;
+    border-radius: 8px !important;
+    padding: 20px !important;
+    width: 400px !important;
+    max-height: 600px !important;
+    overflow-y: auto !important;
+    box-shadow: 0 4px 20px rgba(0,0,0,0.3) !important;
+  `;
+  
+  // 获取所有文件夹
+  const folders = getAllFolders();
+  
+  // 加载当前设置
+  loadSettings().then((settings) => {
+    const customVisibility = settings.customFolderVisibility || {};
+    
+    dialog.innerHTML = `
+      <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 20px;">
+        <h3 style="margin: 0; color: #333; font-size: 16px;">管理笔记目录显示</h3>
+        <button id="close-folder-dialog" style="
+          background: none;
+          border: none;
+          font-size: 24px;
+          cursor: pointer;
+          color: #999;
+          line-height: 1;
+        ">×</button>
+      </div>
+      
+      <div style="margin-bottom: 15px; padding: 10px; background: #f5f5f5; border-radius: 4px; font-size: 13px; color: #666;">
+        💡 提示：勾选表示显示该目录，取消勾选表示隐藏
+      </div>
+      
+      <div id="folder-list" style="margin-bottom: 20px;">
+        ${folders.map(folder => `
+          <label style="display: flex; justify-content: space-between; align-items: center; padding: 10px 0; border-bottom: 1px solid #f0f0f0;">
+            <span style="color: #333; font-size: 14px;">${folder}</span>
+            <input type="checkbox" class="folder-visibility-checkbox" data-folder="${folder}" 
+              ${customVisibility[folder] !== false ? "checked" : ""} 
+              style="width: 18px; height: 18px;">
+          </label>
+        `).join('')}
+      </div>
+      
+      <div style="display: flex; gap: 10px;">
+        <button id="save-folder-visibility" style="
+          flex: 1;
+          background-color: #ff6700;
+          color: white;
+          border: none;
+          padding: 10px;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 14px;
+        ">保存</button>
+        <button id="cancel-folder-dialog" style="
+          flex: 1;
+          background-color: #ccc;
+          color: white;
+          border: none;
+          padding: 10px;
+          border-radius: 4px;
+          cursor: pointer;
+          font-size: 14px;
+        ">取消</button>
+      </div>
+    `;
+    
+    overlay.appendChild(dialog);
+    document.body.appendChild(overlay);
+    
+    // 关闭按钮事件
+    document.getElementById("close-folder-dialog").addEventListener("click", function() {
+      overlay.remove();
+    });
+    
+    document.getElementById("cancel-folder-dialog").addEventListener("click", function() {
+      overlay.remove();
+    });
+    
+    // 点击遮罩层关闭
+    overlay.addEventListener("click", function(e) {
+      if (e.target === overlay) {
+        overlay.remove();
+      }
+    });
+    
+    // 保存按钮事件
+    document.getElementById("save-folder-visibility").addEventListener("click", function() {
+      const checkboxes = document.querySelectorAll(".folder-visibility-checkbox");
+      const newVisibility = {};
+      
+      checkboxes.forEach(checkbox => {
+        const folderName = checkbox.getAttribute("data-folder");
+        newVisibility[folderName] = checkbox.checked;
+      });
+      
+      // 保存设置
+      settings.customFolderVisibility = newVisibility;
+      saveSettings(settings).then(() => {
+        alert("文件夹显示设置已保存！刷新页面后生效。");
+        overlay.remove();
+        // 应用设置
+        applyCustomFolderVisibility(newVisibility);
+      });
+    });
+  });
+}
+
+// 获取所有文件夹名称
+function getAllFolders() {
+  const folders = [];
+  const folderContainerArray = findElementsByPartialClassName(folderListContainerClassName);
+  
+  if (!folderContainerArray.length) {
+    console.log("未找到文件夹容器");
+    return folders;
+  }
+  
+  const sidebarItems = folderContainerArray[0].querySelectorAll('[class*="sidebar-item"]');
+  
+  sidebarItems.forEach((item) => {
+    const text = item.textContent.trim();
+    if (text && !folders.includes(text)) {
+      folders.push(text);
+    }
+  });
+  
+  return folders;
+}
+
+// 应用自定义文件夹显示设置
+function applyCustomFolderVisibility(customVisibility) {
+  if (!customVisibility || Object.keys(customVisibility).length === 0) {
+    return;
+  }
+  
+  const folderContainerArray = findElementsByPartialClassName(folderListContainerClassName);
+  
+  if (!folderContainerArray.length) {
+    console.log("未找到文件夹容器，1秒后重试");
+    setTimeout(() => applyCustomFolderVisibility(customVisibility), 1000);
+    return;
+  }
+  
+  const sidebarItems = folderContainerArray[0].querySelectorAll('[class*="sidebar-item"]');
+  
+  sidebarItems.forEach((item) => {
+    const text = item.textContent.trim();
+    if (customVisibility.hasOwnProperty(text)) {
+      if (customVisibility[text] === false) {
+        item.style.display = "none";
+      } else {
+        item.style.display = "";
+      }
+    }
+  });
+  
+  console.log("已应用自定义文件夹显示设置");
+}
+
 
