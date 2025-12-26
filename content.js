@@ -11,6 +11,8 @@ const defaultSettings = {
   tocShowH1: true,
   tocShowH2: true,
   tocShowH3: true,
+  collapseNoteList: false, // 显示笔记列表折叠按钮
+  defaultCollapseNoteList: false, // 默认折叠笔记列表
 };
 
 // 程序入口
@@ -100,6 +102,13 @@ function handleSetting(settings) {
     }, 3000);
   }
   
+  // 应用笔记列表折叠设置
+  if (settings.collapseNoteList) {
+    setTimeout(() => {
+      setupNoteListCollapse(settings.defaultCollapseNoteList);
+    }, 1500);
+  }
+  
   // 自动打开有用暂存文件夹
   setTimeout(() => {
     getUsefulTempFolder();
@@ -142,17 +151,21 @@ function expandSettingsPanel() {
         <h3 style="margin: 0; color: #333; font-size: 16px;">小米便签增强设置</h3>
       </div>
       
-      <div style="margin-bottom: 15px;">
+      <!-- 笔记目录设置分组 -->
+      <div style="margin-bottom: 15px; padding-top: 10px; border-top: 2px solid #f0f0f0;">
+        <div style="font-size: 14px; font-weight: bold; color: #ff6700; margin-bottom: 10px;">
+          📂 笔记目录设置
+        </div>
         
-        <label style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f0f0f0;">
-          <span style="color: #333;">隐藏全部笔记</span>
+        <label style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0 8px 12px; border-bottom: 1px solid #f5f5f5;">
+          <span style="color: #666; font-size: 13px;">隐藏全部笔记</span>
           <input type="checkbox" id="setting-hide-all-folders" style="width: 18px; height: 18px;" ${
             settings.hideAllFolder ? "checked" : ""
           }>
         </label>
-
-        <label style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0; border-bottom: 1px solid #f0f0f0;">
-          <span style="color: #333;">隐藏未分类</span>
+        
+        <label style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0 8px 12px;">
+          <span style="color: #666; font-size: 13px;">隐藏未分类</span>
           <input type="checkbox" id="setting-hide-unclassified" style="width: 18px; height: 18px;" ${
             settings.hideUnclassified ? "checked" : ""
           }>
@@ -178,7 +191,7 @@ function expandSettingsPanel() {
             settings.tocShowH1 ? "checked" : ""
           }>
         </label>
-        
+
         <label style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0 8px 12px; border-bottom: 1px solid #f5f5f5;">
           <span style="color: #666; font-size: 13px;">显示H2</span>
           <input type="checkbox" id="setting-toc-show-h2" style="width: 18px; height: 18px;" ${
@@ -191,6 +204,27 @@ function expandSettingsPanel() {
           <input type="checkbox" id="setting-toc-show-h3" style="width: 18px; height: 18px;" ${
             settings.tocShowH3 ? "checked" : ""
           }>
+        </label>
+      </div>
+      
+      <!-- 布局设置分组 -->
+      <div style="margin-bottom: 15px; padding-top: 10px; border-top: 2px solid #f0f0f0;">
+        <div style="font-size: 14px; font-weight: bold; color: #ff6700; margin-bottom: 10px;">
+          🎨 布局设置
+        </div>
+        
+        <label style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0 8px 12px;">
+          <span style="color: #666; font-size: 13px;">显示笔记列表折叠按钮</span>
+          <input type="checkbox" id="setting-collapse-note-list" style="width: 18px; height: 18px;" ${
+            settings.collapseNoteList ? "checked" : ""
+          }>
+        </label>
+        
+        <label id="default-collapse-label" style="display: flex; justify-content: space-between; align-items: center; padding: 8px 0 8px 24px; opacity: ${settings.collapseNoteList ? "1" : "0.5"};">
+          <span style="color: #666; font-size: 13px;">默认折叠笔记列表</span>
+          <input type="checkbox" id="setting-default-collapse-note-list" style="width: 18px; height: 18px;" ${
+            settings.defaultCollapseNoteList ? "checked" : ""
+          } ${settings.collapseNoteList ? "" : "disabled"}>
         </label>
       </div>
       
@@ -208,6 +242,22 @@ function expandSettingsPanel() {
     `;
 
     document.body.appendChild(panel);
+
+    // 添加折叠按钮的联动逻辑
+    const collapseNoteListCheckbox = document.getElementById("setting-collapse-note-list");
+    const defaultCollapseCheckbox = document.getElementById("setting-default-collapse-note-list");
+    const defaultCollapseLabel = document.getElementById("default-collapse-label");
+    
+    collapseNoteListCheckbox.addEventListener("change", function() {
+      if (this.checked) {
+        defaultCollapseCheckbox.disabled = false;
+        defaultCollapseLabel.style.opacity = "1";
+      } else {
+        defaultCollapseCheckbox.disabled = true;
+        defaultCollapseCheckbox.checked = false;
+        defaultCollapseLabel.style.opacity = "0.5";
+      }
+    });
 
     // 鼠标移出面板时，收起
     panel.addEventListener("mouseleave", function() {
@@ -237,8 +287,14 @@ function expandSettingsPanel() {
         const tocShowH3 = document.getElementById(
           "setting-toc-show-h3"
         ).checked;
+        const collapseNoteList = document.getElementById(
+          "setting-collapse-note-list"
+        ).checked;
+        const defaultCollapseNoteList = document.getElementById(
+          "setting-default-collapse-note-list"
+        ).checked;
 
-        // 保存设置
+        // 保存设置（如果不显示按钮，则默认折叠设置强制为false）
         const settings = {
           hideAllFolder,
           hideUnclassified,
@@ -246,6 +302,8 @@ function expandSettingsPanel() {
           tocShowH1,
           tocShowH2,
           tocShowH3,
+          collapseNoteList,
+          defaultCollapseNoteList: collapseNoteList ? defaultCollapseNoteList : false,
         };
 
         saveSettings(settings).then(() => {
@@ -263,6 +321,13 @@ function expandSettingsPanel() {
           } else {
             removeFloatingToc();
           }
+          
+          // 应用笔记列表折叠设置
+          if (collapseNoteList) {
+            setupNoteListCollapse(defaultCollapseNoteList);
+          } else {
+            removeNoteListCollapse();
+          }
 
           // 显示已应用提示
           alert(
@@ -270,6 +335,10 @@ function expandSettingsPanel() {
               hideAllFolder ? "开启" : "关闭"
             }\n隐藏未分类: ${hideUnclassified ? "开启" : "关闭"}\n悬浮目录: ${
               floatingToc ? "开启" : "关闭"
+            }\n显示笔记列表折叠按钮: ${
+              collapseNoteList ? "开启" : "关闭"
+            }\n默认折叠笔记列表: ${
+              defaultCollapseNoteList ? "开启" : "关闭"
             }`
           );
 
@@ -283,7 +352,7 @@ function expandSettingsPanel() {
             }, 500);
           }
         });
-    });
+      });
   });
 }
 
@@ -1125,4 +1194,142 @@ function determineHeadingLevel(element) {
   if (fontSize > 20) return 1;
   if (fontSize > 18) return 2;
   return 3;
+}
+
+// 设置笔记列表折叠功能
+function setupNoteListCollapse(isDefaultCollapsed) {
+  // 移除旧的按钮（如果存在）
+  removeNoteListCollapse();
+  
+  // 创建控制按钮（在笔记主体左侧）
+  createNoteListCollapseButton(isDefaultCollapsed);
+  
+  console.log("笔记列表折叠功能已启用，默认折叠状态:", isDefaultCollapsed);
+}
+
+// 创建折叠控制按钮
+function createNoteListCollapseButton(isDefaultCollapsed) {
+  // 查找笔记列表区域
+  const noteList = document.querySelector('[class*="note-list-"]');
+  if (!noteList) {
+    console.log("未找到笔记列表区域，1秒后重试");
+    setTimeout(() => createNoteListCollapseButton(isDefaultCollapsed), 1000);
+    return;
+  }
+  
+  // 如果按钮已存在，不重复创建
+  if (document.getElementById("mi-note-list-collapse-btn")) {
+    return;
+  }
+  
+  // 获取笔记列表的宽度和位置
+  const noteListRect = noteList.getBoundingClientRect();
+  
+  // 创建按钮
+  const collapseBtn = document.createElement("div");
+  collapseBtn.id = "mi-note-list-collapse-btn";
+  collapseBtn.innerHTML = "▶"; // 默认显示向右箭头
+  collapseBtn.style.cssText = `
+    position: fixed !important;
+    left: 245px !important;
+    top: 89px !important;
+    transform: translateY(-50%) !important;
+    width: 20px !important;
+    height: 40px !important;
+    background: #fff !important;
+    border: 1px solid #ddd !important;
+    border-radius: 6px !important;
+    cursor: pointer !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    font-size: 12px !important;
+    color: #666 !important;
+    z-index: 9999 !important;
+    box-shadow: 0 2px 6px rgba(0,0,0,0.12) !important;
+    transition: all 0.3s ease !important;
+  `;
+  collapseBtn.title = "折叠/展开笔记列表";
+  collapseBtn.setAttribute("data-collapsed", "false");
+  
+  // 鼠标悬停效果
+  collapseBtn.addEventListener("mouseenter", function() {
+    this.style.background = "#f5f5f5";
+  });
+  
+  collapseBtn.addEventListener("mouseleave", function() {
+    this.style.background = "#fff";
+  });
+  
+  // 点击事件
+  collapseBtn.addEventListener("click", function() {
+    toggleNoteListCollapse();
+  });
+  
+  document.body.appendChild(collapseBtn);
+  console.log("笔记列表折叠按钮已创建，位置：left=245px, top=89px");
+  
+  // 如果设置了默认折叠，则自动执行折叠
+  if (isDefaultCollapsed) {
+    setTimeout(() => {
+      toggleNoteListCollapse();
+    }, 500);
+  }
+}
+
+// 切换笔记列表折叠状态
+function toggleNoteListCollapse() {
+  const collapseBtn = document.getElementById("mi-note-list-collapse-btn");
+  const noteList = document.querySelector('[class*="note-list-"]');
+  const noteContent = document.querySelector('[class*="note-content"]');
+  
+  if (!collapseBtn || !noteList || !noteContent) {
+    console.log("未找到必要的DOM元素");
+    return;
+  }
+  
+  const isCollapsed = collapseBtn.getAttribute("data-collapsed") === "true";
+  
+  if (isCollapsed) {
+    // 展开笔记列表
+    noteList.style.display = "";
+    noteList.style.width = "";
+    noteContent.style.marginLeft = "";
+    noteContent.style.width = "";
+    collapseBtn.innerHTML = "◀";
+    collapseBtn.setAttribute("data-collapsed", "false");
+    // 按钮位置保持不变，固定在笔记列表右侧
+  } else {
+    // 折叠笔记列表
+    noteList.style.display = "none";
+    noteContent.style.marginLeft = "0";
+    noteContent.style.width = "100%";
+    collapseBtn.innerHTML = "▶";
+    collapseBtn.setAttribute("data-collapsed", "true");
+    // 按钮位置保持不变，固定在原位置
+  }
+}
+
+// 移除笔记列表折叠功能
+function removeNoteListCollapse() {
+  const collapseBtn = document.getElementById("mi-note-list-collapse-btn");
+  if (collapseBtn) {
+    collapseBtn.remove();
+  }
+  
+  // 恢复原始样式
+  const noteList = document.querySelector('[class*="note-list-"]');
+  const noteContent = document.querySelector('[class*="note-content"]');
+  
+  if (noteList) {
+    noteList.style.display = "";
+    noteList.style.width = "";
+  }
+  
+  if (noteContent) {
+    noteContent.style.marginLeft = "";
+    noteContent.style.width = "";
+  }
+  
+  console.log("笔记列表折叠功能已移除");
 }
