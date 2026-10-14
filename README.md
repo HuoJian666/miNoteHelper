@@ -7,7 +7,7 @@
 ### 1. 文件夹管理
 - **隐藏全部笔记**: 一键隐藏侧边栏的"全部笔记"和"我的文件夹"选项
 - **隐藏未分类**: 快速隐藏"未分类"文件夹
-- **自动打开指定文件夹**: 页面加载后自动打开"b-有用暂存"文件夹
+- **默认激活目录**: 可配置页面加载后自动打开的文件夹，默认为 `a-work`；留空关闭自动切换。等待目录加载最多 30 秒，成功或手动选择目录后停止。
 
 ### 2. 便捷操作
 - **悬浮设置按钮**: 页面左下角的悬浮⚙️按钮，随时打开设置面板
@@ -38,6 +38,8 @@
 
 - **隐藏全部笔记**: 隐藏侧边栏的"全部笔记"和"我的文件夹"
 - **隐藏未分类**: 隐藏"未分类"文件夹
+
+- **默认激活目录**: 填写完整文件夹名称（默认 `a-work`），点击“应用设置”保存，下次打开或刷新页面生效。
 
 ### 应用设置
 
@@ -130,7 +132,7 @@ MIT License
 - `loadSettings()`: 从存储加载设置
 - `applyHideFolderSettings()`: 应用隐藏文件夹设置
 - `applyHideUnclassifiedSettings()`: 应用隐藏未分类设置
-- `getUsefulTempFolder()`: 自动打开"b-有用暂存"文件夹
+- `activateDefaultFolder()`: 目录加载后自动打开配置的默认目录
 
 ### 默认配置
 
@@ -138,7 +140,8 @@ MIT License
 const defaultSettings = {
   darkMode: false,
   hideAllFolder: true,
-  hideUnclassified: true
+  hideUnclassified: true,
+  defaultActiveFolder: "a-work"
 };
 ```
 

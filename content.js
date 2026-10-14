@@ -13,6 +13,7 @@ const defaultSettings = {
   tocShowH3: true,
   collapseNoteList: false, // 显示笔记列表折叠按钮
   defaultCollapseNoteList: false, // 默认折叠笔记列表
+  defaultActiveFolder: "a-work", // 页面加载后默认激活的目录，留空则关闭
   customFolderVisibility: {}, // 自定义文件夹显示/隐藏状态 {folderName: boolean}
 };
 
@@ -122,10 +123,7 @@ function handleSetting(settings) {
     }, 1500);
   }
   
-  // 自动打开有用暂存文件夹
-  setTimeout(() => {
-    getUsefulTempFolder();
-  }, 2000);
+  activateDefaultFolder(settings.defaultActiveFolder);
 }
 
 // 创建或显示设置面板
@@ -198,6 +196,12 @@ function expandSettingsPanel() {
         </div>
       </div>
       
+      <label style="display: block; margin-bottom: 15px; color: #666; font-size: 13px;">
+        默认激活目录
+        <input type="text" id="setting-default-active-folder" placeholder="留空则不自动切换" style="box-sizing: border-box; width: 100%; margin-top: 6px; padding: 6px;">
+        <span style="display: block; margin-top: 4px; font-size: 12px;">填写完整文件夹名称，下次打开或刷新页面生效。</span>
+      </label>
+
       <!-- 悬浮目录设置分组 -->
       <div style="margin-bottom: 15px; padding-top: 10px; border-top: 2px solid #f0f0f0;">
         <div style="font-size: 14px; font-weight: bold; color: #ff6700; margin-bottom: 10px;">
@@ -268,6 +272,7 @@ function expandSettingsPanel() {
     `;
 
     document.body.appendChild(panel);
+    document.getElementById("setting-default-active-folder").value = settings.defaultActiveFolder;
 
     // 添加文件夹管理按钮事件
     document.getElementById("manage-folders-btn").addEventListener("click", function() {
@@ -326,7 +331,9 @@ function expandSettingsPanel() {
         ).checked;
 
         // 保存设置（如果不显示按钮，则默认折叠设置强制为false）
-        const settings = {
+        const updatedSettings = {
+          ...settings,
+          defaultActiveFolder: document.getElementById("setting-default-active-folder").value.trim(),
           hideAllFolder,
           hideUnclassified,
           floatingToc,
@@ -337,7 +344,7 @@ function expandSettingsPanel() {
           defaultCollapseNoteList: collapseNoteList ? defaultCollapseNoteList : false,
         };
 
-        saveSettings(settings).then(() => {
+        saveSettings(updatedSettings).then(() => {
           // 应用隐藏设置
           hideSystemAndAll(hideAllFolder, hideUnclassified);
           
@@ -500,53 +507,39 @@ function getAllSidebarItems() {
   }
 }
 
-// 获取expanded-content下包含"b-有用暂存"的sidebar-item元素
-function getUsefulTempFolder() {
-  // 首先找到class包含expanded-content的元素
-  const folderContainerArray = findElementsByPartialClassName(
-    folderListContainerClassName
-  );
+// 等待异步目录加载；成功、用户手动选目录或超时后停止，避免抢回选择。
+function activateDefaultFolder(folderName) {
+  const name = typeof folderName === "string" ? folderName.trim() : "";
+  if (!name) return;
 
-  if (!folderContainerArray.length) {
-    console.log("未找到expanded-content元素");
-    return;
-  }
-  const folderContainer = folderContainerArray[0];
-
-  const sidebarItems = folderContainer.querySelectorAll(
-    '[class*="sidebar-item"]'
-  );
-  console.log("sidebarItems", sidebarItems);
-  // 遍历sidebar-item元素，检查是否包含"b-有用暂存"文本
-  let targetItem;
-
-  sidebarItems.forEach((item) => {
-    if (item.textContent.includes("b-有用暂存")) {
-      console.log("找到有用暂存文件夹元素:", item);
-      targetItem = item;
+  let retry;
+  let timeout;
+  const stop = () => {
+    clearInterval(retry);
+    clearTimeout(timeout);
+    document.removeEventListener("click", onManualSelection, true);
+  };
+  const onManualSelection = (event) => {
+    if (event.isTrusted && event.target.closest?.('[class*="sidebar-item"]')) stop();
+  };
+  const activate = () => {
+    const folders = document.querySelectorAll(
+      `[class*="${folderListContainerClassName}"] [class*="sidebar-item"]`
+    );
+    const target = Array.from(folders).find(item => item.textContent.trim() === name);
+    if (!target) return;
+    // 目录出现时页面可能还在初始化；点击不等于选中，下一轮确认结果。
+    if (Array.from(target.classList).some(className => className.startsWith("active-"))) {
+      stop();
+      return;
     }
-  });
+    target.click();
+  };
 
-  if (!targetItem) {
-    console.log("查找目标sidebar-item失败");
-    return;
-  }
-
-  console.log("找到目标sidebar-item", targetItem);
-  targetItem.click();
-}
-
-// 如果需要点击该元素，可以使用下面的函数
-function clickUsefulTempFolder() {
-  const folderElement = getUsefulTempFolder();
-  if (folderElement) {
-    console.log("点击有用暂存文件夹");
-    folderElement.click();
-    return true;
-  } else {
-    console.log("未找到有用暂存文件夹，无法点击");
-    return false;
-  }
+  retry = setInterval(activate, 500);
+  document.addEventListener("click", onManualSelection, true);
+  timeout = setTimeout(stop, 30000);
+  activate();
 }
 
 function hideSystemAndAll(hideAllFolder, hideUnclassified) {
